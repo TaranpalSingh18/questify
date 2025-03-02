@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEffect } from "react";
 import { Link, useNavigate } from 'react-router-dom';
 import { Briefcase, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -8,15 +9,32 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { login } = useAuth();
+  const { login, currentUser, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
+  // ✅ Reset fields when page loads
+  useEffect(() => {
+    setEmail("");
+    setPassword("");
+  }, []);
+
+  // ✅ Auto-redirect hirers to dashboard after login
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (currentUser?.role === "hirer") {
+        console.log("✅ Redirecting Hirer to Dashboard...");
+        navigate("/hirer-dashboard");
+      } else {
+        navigate("/");
+      }
+    }
+  }, [isAuthenticated, currentUser, navigate]);
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    
+
     try {
       const success = await login(email, password);
       if (success) {
@@ -32,15 +50,16 @@ const LoginPage: React.FC = () => {
     }
   };
 
+
   // For demo purposes, provide quick login options
   const demoLogins = [
     { email: 'john@example.com', role: 'Job Seeker' },
     { email: 'jane@techcorp.com', role: 'Hirer' }
   ];
-
+  
   const handleDemoLogin = async (demoEmail: string) => {
     setEmail(demoEmail);
-    setPassword('password'); // In a real app, this would be a secure password
+    setPassword('password123'); // In a real app, this would be a secure password
     
     try {
       setIsLoading(true);
@@ -102,7 +121,7 @@ const LoginPage: React.FC = () => {
                   id="email"
                   name="email"
                   type="email"
-                  autoComplete="email"
+                  autoComplete="random123" 
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

@@ -44,13 +44,13 @@ const SignupPage: React.FC = () => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-    
+
     try {
       const success = await signup(name, email, password, role);
       if (success) {
         navigate('/');
       } else {
-        setError('Failed to create account');
+        setError('Signup failed. Try again.');
       }
     } catch (err) {
       setError('An error occurred during signup');
@@ -59,6 +59,7 @@ const SignupPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
 
   const handleSkillToggle = (skill: string) => {
     if (skills.includes(skill)) {
