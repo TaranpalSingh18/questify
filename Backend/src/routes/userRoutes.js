@@ -3,110 +3,124 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { body, validationResult } = require("express-validator");
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const auth = require('../middleware/auth');
 require("dotenv").config();
 
 const router = express.Router();
 
-// Signup User
-router.post(
-  "/signup",
-  [
-    body("name").notEmpty().withMessage("Name is required"),
-    body("email").isEmail().withMessage("Valid email is required"),
-    body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
-    body("role").notEmpty().withMessage("Role is required"),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+// Configure multer for certificate uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const dir = 'uploads/certificates';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
-
-    try {
-      const { name, email, password, role } = req.body;
-
-      let user = await User.findOne({ email });
-      if (user) {
-        return res.status(400).json({ error: "User already exists" });
-      }
-
-      // Hash the password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      // Create new user
-      user = new User({ name, email, password: hashedPassword, role });
-      await user.save();
-
-      // Generate JWT Token
-      const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-      res.status(201).json({ message: "User registered successfully", user: { name, email, role }, token });
-    } catch (error) {
-      res.status(500).json({ error: "Server error, please try again" });
-    }
-  }
-);
-
-// Login User
-router.post(
-  "/login",
-  [
-    body("email").isEmail().withMessage("Valid email is required"),
-    body("password").notEmpty().withMessage("Password is required"),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-
-    try {
-      const { email, password } = req.body;
-
-      const user = await User.findOne({ email });
-      if (!user) {
-        return res.status(400).json({ error: "Invalid email or password" });
-      }
-
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ error: "Invalid email or password" });
-      }
-
-      const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-      res.json({ message: "Login successful", user: { name: user.name, email: user.email, role: user.role }, token });
-    } catch (error) {
-      res.status(500).json({ error: "Server error, please try again" });
-    }
-  }
-);
-
-// Middleware to verify JWT
-const authenticateUser = (req, res, next) => {
-  const token = req.header("Authorization");
-  if (!token) {
-    return res.status(401).json({ error: "Access denied, no token provided" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(403).json({ error: "Invalid token" });
-  }
-};
-
-// Get All Users (Protected Route)
-router.get("/", authenticateUser, async (req, res) => {
-  try {
-    const users = await User.find().select("-password");
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: "Server error, please try again" });
+    cb(null, dir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
   }
 });
 
-module.exports = router;
+const upload = multer({
+  storage: storage,
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF and Word documents are allowed.'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+// Update user profile
+router.put('/profile', auth, async (req, res) => {
+  try {
+    const { name, title, company, skills, interests } = req.body;
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update user fields
+    if (name) user.name = name;
+    if (title) user.title = title;
+    if (company) user.company = company;
+    if (skills) user.skills = skills;
+    if (interests) user.interests = interests;
+
+    await user.save();
+    res.json(user);
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ message: 'Error updating profile' });
+  }
+});
+
+// Add certificate
+router.post('/certificates', auth, upload.single('certificate'), async (req, res) => {
+  try {
+    const { name, issuer, dateIssued, skills } = req.body;
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const certificate = {
+      name,
+      issuer,
+      dateIssued,
+      fileUrl: `/uploads/certificates/${req.file.filename}`,
+      skills: JSON.parse(skills || '[]'),
+      verified: false
+    };
+
+    // Check if any skills match and award coins
+    let coinsAdded = 0;
+    const matchingSkills = certificate.skills.filter(skill => user.skills.includes(skill));
+    if (matchingSkills.length > 0) {
+      coinsAdded = 10;
+      user.coins += coinsAdded;
+    }
+
+    user.certificates.push(certificate);
+    await user.save();
+
+    res.json({ 
+      message: 'Certificate added successfully',
+      coinsAdded
+    });
+  } catch (error) {
+    console.error('Certificate upload error:', error);
+    res.status(500).json({ message: 'Error uploading certificate' });
+  }
+});
+
+// Get user certificates
+router.get('/certificates', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user.certificates);
+  } catch (error) {
+    console.error('Error fetching certificates:', error);
+    res.status(500).json({ message: 'Error fetching certificates' });
+  }
+});
+
+module.exports = router; 

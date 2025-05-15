@@ -1,6 +1,15 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
+const CertificateSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  issuer: { type: String, required: true },
+  dateIssued: { type: Date, required: true },
+  fileUrl: { type: String, required: true },
+  skills: [{ type: String }], // Skills this certificate validates
+  verified: { type: Boolean, default: false }
+}, { timestamps: true });
+
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, unique: true, required: true },
@@ -11,6 +20,8 @@ const UserSchema = new mongoose.Schema({
   company: String,
   skills: [String],
   interests: [String],
+  certificates: [CertificateSchema],
+  coins: { type: Number, default: 0 } // Gamification: coin balance for the user
 }, { timestamps: true });
 
 // Hash password before saving
@@ -20,4 +31,5 @@ UserSchema.pre("save", async function (next) {
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
+
 module.exports = mongoose.model("User", UserSchema);
