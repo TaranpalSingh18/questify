@@ -10,6 +10,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string, role: string) => Promise<boolean>;
   logout: () => void;
+  updateUserProfile: (userData: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const navigate = useNavigate();
   
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -27,6 +29,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsAuthenticated(true);
     }
   }, []);
+
+  const updateUserProfile = async (userData: any) => {
+    try {
+      const response = await axios.put(
+        "http://localhost:5000/api/users/profile",
+        userData,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+      
+      const updatedUser = response.data;
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setCurrentUser(updatedUser);
+    } catch (error) {
+      console.error("Profile update error:", error);
+      throw error;
+    }
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await axios.post("http://localhost:5000/api/auth/login", { email, password });
@@ -35,7 +59,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setCurrentUser(response.data.user);
       setIsAuthenticated(true);
-      const navigate = useNavigate();
+      
       if (response.data.user.role === "hirer") {
         navigate("/hirer-dashboard");
       } else {
@@ -69,21 +93,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem("user");
     setCurrentUser(null);
     setIsAuthenticated(false);
-    const navigate = useNavigate();
     navigate("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isAuthenticated, login, signup, logout }}>
+    <AuthContext.Provider value={{ 
+      currentUser, 
+      isAuthenticated, 
+      login, 
+      signup, 
+      logout,
+      updateUserProfile 
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };

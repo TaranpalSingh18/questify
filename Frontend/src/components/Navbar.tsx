@@ -1,7 +1,9 @@
+// src/components/Navbar.tsx
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Bell, MessageSquare, User, Briefcase, LogOut } from 'lucide-react';
+import { Search, Bell, MessageSquare, User, Briefcase } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { CiCoins1 } from "react-icons/ci";
 
 const Navbar: React.FC = () => {
   const { currentUser, isAuthenticated, logout } = useAuth();
@@ -39,7 +41,12 @@ const Navbar: React.FC = () => {
           {isAuthenticated ? (
             <div className="flex items-center">
               <div className="flex items-center">
-                <button className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none">
+                <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                  <CiCoins1 className='h-6 w-6 text-yellow-500'/>
+                  <span className="text-sm font-medium text-yellow-700 ml-1">{currentUser?.coins || 0}</span>
+                </div>
+            
+                <button className="ml-4 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none">
                   <Bell className="h-6 w-6" />
                 </button>
                 <button className="ml-2 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none">
