@@ -11,6 +11,9 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
 // Connect to MongoDB
 connectDB();
 console.log("✅ MONGO_URI:", process.env.MONGO_URI); // Debugging
