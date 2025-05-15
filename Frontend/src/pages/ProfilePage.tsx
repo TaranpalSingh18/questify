@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Edit2, MapPin, Briefcase, Calendar, ExternalLink, Github as GitHub, Linkedin, X, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -16,6 +16,9 @@ const ProfilePage: React.FC = () => {
   const [title, setTitle] = useState(currentUser?.title || '');
   const [skills, setSkills] = useState<string[]>(currentUser?.skills || []);
   const [interests, setInterests] = useState<string[]>(currentUser?.interests || []);
+  const [profilePictureFile, setProfilePictureFile] = useState<File | null>(null);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [profilePictureError, setProfilePictureError] = useState('');
   
   // Certificate upload states
   const [certName, setCertName] = useState('');
@@ -26,7 +29,31 @@ const ProfilePage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState('');
   
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [isLoadingCertificates, setIsLoadingCertificates] = useState(true);
+  
   const submissions = currentUser ? getSubmissionsByUserId(currentUser.id) : [];
+
+  useEffect(() => {
+    const fetchCertificates = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/users/certificates', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        setCertificates(response.data);
+      } catch (error) {
+        console.error('Error fetching certificates:', error);
+      } finally {
+        setIsLoadingCertificates(false);
+      }
+    };
+
+    if (currentUser) {
+      fetchCertificates();
+    }
+  }, [currentUser]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -67,6 +94,10 @@ const ProfilePage: React.FC = () => {
         }
       });
 
+      // Update certificates list
+      setCertificates(prev => [...prev, response.data.certificate]);
+
+      // Show success message with coins earned
       if (response.data.coinsAdded > 0) {
         alert(`Certificate uploaded successfully! You earned ${response.data.coinsAdded} coins!`);
       } else {
@@ -79,12 +110,78 @@ const ProfilePage: React.FC = () => {
       setIssuer('');
       setDateIssued('');
       setCertSkills([]);
-      window.location.reload(); // Refresh to show new certificate
     } catch (error) {
       setError('Error uploading certificate. Please try again.');
       console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      if (selectedFile.type.startsWith('image/')) {
+        setProfilePictureFile(selectedFile);
+        setProfilePictureError('');
+      } else {
+        setProfilePictureError('Please upload an image file (JPEG, PNG, or GIF)');
+      }
+    }
+  };
+
+  const handleProfilePictureUpload = async () => {
+    if (!profilePictureFile) {
+      setProfilePictureError('Please select an image to upload');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setProfilePictureError('Authentication error. Please log in again.');
+      return;
+    }
+
+    setIsUploadingPicture(true);
+    setProfilePictureError('');
+
+    const formData = new FormData();
+    formData.append('profilePicture', profilePictureFile);
+
+    try {
+      console.log('Uploading file:', profilePictureFile); // Debug log
+      const response = await axios.post('http://localhost:5000/api/users/profile-picture', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log('Upload response:', response.data); // Debug log
+
+      // Update the user's profile picture in the local state and localStorage
+      const updatedUser = { ...currentUser, profilePicture: response.data.profilePicture };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      // Update the current user in the auth context
+      if (updateUserProfile) {
+        await updateUserProfile(updatedUser);
+      }
+      
+      // Close the modal
+      setProfilePictureFile(null);
+    } catch (error: any) {
+      console.error('Profile picture upload error:', error);
+      if (error.response?.status === 401) {
+        setProfilePictureError('Session expired. Please log in again.');
+        // Optionally redirect to login page
+        // navigate('/login');
+      } else {
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Error uploading profile picture';
+        setProfilePictureError(errorMessage);
+      }
+    } finally {
+      setIsUploadingPicture(false);
     }
   };
 
@@ -108,14 +205,22 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  const handleSaveProfile = () => {
-    updateUserProfile({
-      name,
-      title,
-      skills,
-      interests
-    });
-    setIsEditing(false);
+  const handleSaveProfile = async () => {
+    try {
+      const updatedData = {
+        name,
+        title,
+        skills,
+        interests,
+        company: currentUser.company // Preserve existing company
+      };
+
+      await updateUserProfile(updatedData);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('Failed to update profile. Please try again.');
+    }
   };
 
   return (
@@ -129,44 +234,124 @@ const ProfilePage: React.FC = () => {
             
             <div className="px-6 sm:px-8">
               <div className="flex flex-col sm:flex-row sm:items-end -mt-16 mb-6">
-                <div className="flex-shrink-0 mb-4 sm:mb-0 sm:mr-6">
+                <div className="flex-shrink-0 mb-4 sm:mb-0 sm:mr-6 relative group">
                   {currentUser.profilePicture ? (
                     <img 
                       src={currentUser.profilePicture} 
                       alt={currentUser.name} 
                       className="h-32 w-32 rounded-full border-4 border-white object-cover"
+                      onError={(e) => {
+                        // If image fails to load, show the fallback
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
                     />
-                  ) : (
-                    <div className="h-32 w-32 rounded-full border-4 border-white bg-blue-100 flex items-center justify-center">
-                      <span className="text-blue-600 font-bold text-4xl">{currentUser.name.charAt(0)}</span>
-                    </div>
-                  )}
+                  ) : null}
+                  <div className={`h-32 w-32 rounded-full border-4 border-white bg-blue-100 flex items-center justify-center ${currentUser.profilePicture ? 'hidden' : ''}`}>
+                    <span className="text-blue-600 font-bold text-4xl">{currentUser.name.charAt(0)}</span>
+                  </div>
+                  
+                  {/* Profile Picture Upload Overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleProfilePictureChange}
+                      />
+                      <Upload className="h-8 w-8 text-white" />
+                    </label>
+                  </div>
                 </div>
-                
+
+                {/* Profile Picture Upload Modal */}
+                {profilePictureFile && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg max-w-md w-full">
+                      <h3 className="text-lg font-medium text-gray-900 mb-4">Upload Profile Picture</h3>
+                      <div className="mb-4">
+                        <img
+                          src={URL.createObjectURL(profilePictureFile)}
+                          alt="Preview"
+                          className="w-full h-48 object-cover rounded-lg"
+                        />
+                      </div>
+                      {profilePictureError && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                          <p className="text-red-600 text-sm">{profilePictureError}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-end space-x-3">
+                        <button
+                          onClick={() => {
+                            setProfilePictureFile(null);
+                            setProfilePictureError('');
+                          }}
+                          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleProfilePictureUpload}
+                          disabled={isUploadingPicture}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {isUploadingPicture ? 'Uploading...' : 'Upload'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       {isEditing ? (
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="text-2xl font-bold text-gray-900 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 mb-1"
-                        />
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Name
+                            </label>
+                            <input
+                              type="text"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              className="w-full text-2xl font-bold text-gray-900 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Title
+                            </label>
+                            <input
+                              type="text"
+                              value={title}
+                              onChange={(e) => setTitle(e.target.value)}
+                              placeholder="Add your title"
+                              className="w-full text-lg text-gray-600 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Company
+                            </label>
+                            <input
+                              type="text"
+                              value={currentUser.company || ''}
+                              onChange={(e) => updateUserProfile({ ...currentUser, company: e.target.value })}
+                              placeholder="Add your company"
+                              className="w-full text-lg text-gray-600 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+                        </div>
                       ) : (
-                        <h1 className="text-2xl font-bold text-gray-900">{currentUser.name}</h1>
-                      )}
-                      
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          placeholder="Add your title"
-                          className="text-lg text-gray-600 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      ) : (
-                        <p className="text-lg text-gray-600">{currentUser.title || 'No title added'}</p>
+                        <>
+                          <h1 className="text-2xl font-bold text-gray-900">{currentUser.name}</h1>
+                          <p className="text-lg text-gray-600">{currentUser.title || 'No title added'}</p>
+                        </>
                       )}
                     </div>
                     
@@ -174,7 +359,14 @@ const ProfilePage: React.FC = () => {
                       {isEditing ? (
                         <div className="flex space-x-3">
                           <button
-                            onClick={() => setIsEditing(false)}
+                            onClick={() => {
+                              // Reset form values to original
+                              setName(currentUser.name);
+                              setTitle(currentUser.title || '');
+                              setSkills(currentUser.skills || []);
+                              setInterests(currentUser.interests || []);
+                              setIsEditing(false);
+                            }}
                             className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           >
                             Cancel
@@ -183,7 +375,7 @@ const ProfilePage: React.FC = () => {
                             onClick={handleSaveProfile}
                             className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           >
-                            Save
+                            Save Changes
                           </button>
                         </div>
                       ) : (
@@ -394,7 +586,12 @@ const ProfilePage: React.FC = () => {
 
                   {/* Certificate Upload Section */}
                   <div className="mt-8 border-t border-gray-200 pt-8">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Certificate</h2>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold text-gray-900">Upload Certificate</h2>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Earn 20 coins per certificate
+                      </span>
+                    </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -520,6 +717,58 @@ const ProfilePage: React.FC = () => {
                         {isUploading ? 'Uploading...' : 'Upload Certificate'}
                       </button>
                     </form>
+                  </div>
+
+                  {/* Display Certificates Section */}
+                  <div className="mt-8 border-t border-gray-200 pt-8">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Certificates</h2>
+                    {isLoadingCertificates ? (
+                      <div className="text-center py-4">
+                        <p className="text-gray-500">Loading certificates...</p>
+                      </div>
+                    ) : certificates.length > 0 ? (
+                      <div className="space-y-4">
+                        {certificates.map((cert) => (
+                          <div key={cert._id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="font-medium text-gray-900">{cert.name}</h3>
+                                <p className="text-sm text-gray-600">{cert.issuer}</p>
+                                <p className="text-sm text-gray-500">Issued on {new Date(cert.dateIssued).toLocaleDateString()}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {cert.skills.map((skill: string, index: number) => (
+                                    <span
+                                      key={index}
+                                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                    >
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  +20 coins
+                                </span>
+                                <a
+                                  href={cert.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  View Certificate
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500 mb-4">You haven't uploaded any certificates yet</p>
+                        <p className="text-sm text-gray-400">Upload your first certificate to earn 20 coins!</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

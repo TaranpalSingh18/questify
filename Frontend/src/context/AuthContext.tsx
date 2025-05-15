@@ -45,6 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const updatedUser = response.data;
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setCurrentUser(updatedUser);
+      return updatedUser;
     } catch (error) {
       console.error("Profile update error:", error);
       throw error;
