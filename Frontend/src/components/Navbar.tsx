@@ -1,22 +1,58 @@
 // src/components/Navbar.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CiCoins1 } from "react-icons/ci";
 import Leaderboard from './Leaderboard';
 import SubscriptionPlans from './SubscriptionPlans';
+import Chat from './Chat';
 
 const Navbar: React.FC = () => {
   const { currentUser, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Fetch unread messages count
+      const fetchUnreadCount = async () => {
+        try {
+          const response = await fetch('http://localhost:5000/api/messages/unread/count', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setUnreadMessages(data.count);
+          }
+        } catch (error) {
+          console.error('Error fetching unread messages:', error);
+        }
+      };
+
+      fetchUnreadCount();
+      // Set up WebSocket connection for real-time updates
+      const ws = new WebSocket('ws://localhost:5000');
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'unread_count') {
+          setUnreadMessages(data.count);
+        }
+      };
+
+      return () => ws.close();
+    }
+  }, [isAuthenticated]);
 
   return (
     <>
@@ -69,8 +105,16 @@ const Navbar: React.FC = () => {
                   <button className="ml-4 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none">
                     <Bell className="h-6 w-6" />
                   </button>
-                  <button className="ml-2 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none">
+                  <button 
+                    onClick={() => setShowChat(true)}
+                    className="ml-2 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none relative"
+                  >
                     <MessageSquare className="h-6 w-6" />
+                    {unreadMessages > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadMessages}
+                      </span>
+                    )}
                   </button>
                   
                   <div className="ml-3 relative">
@@ -165,6 +209,9 @@ const Navbar: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Chat Modal */}
+      {showChat && <Chat onClose={() => setShowChat(false)} />}
     </>
   );
 };

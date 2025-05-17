@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Download } from 'lucide-react';
+import { Award, Download, BarChart2 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import SkillChart from './SkillChart';
 
 interface Certificate {
   _id: string;
@@ -18,6 +19,7 @@ const UserSkills: React.FC = () => {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [skillData, setSkillData] = useState<{ name: string; value: number }[]>([]);
 
   useEffect(() => {
     const fetchCertificates = async () => {
@@ -28,6 +30,21 @@ const UserSkills: React.FC = () => {
           }
         });
         setCertificates(response.data);
+        
+        // Process skill data for the chart
+        const skillCounts: { [key: string]: number } = {};
+        response.data.forEach((cert: Certificate) => {
+          cert.skills.forEach(skill => {
+            skillCounts[skill] = (skillCounts[skill] || 0) + 1;
+          });
+        });
+        
+        const chartData = Object.entries(skillCounts).map(([name, value]) => ({
+          name,
+          value
+        }));
+        
+        setSkillData(chartData);
       } catch (error) {
         console.error('Error fetching certificates:', error);
         setError('Failed to load certificates');
@@ -44,7 +61,11 @@ const UserSkills: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-4">Loading...</div>;
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
   if (error) {
@@ -53,36 +74,38 @@ const UserSkills: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Skills Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4">Skills</h2>
-        <div className="flex flex-wrap gap-2">
-          {currentUser?.skills?.map((skill: string) => (
-            <span
-              key={skill}
-              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-            >
-              {skill}
-            </span>
-          ))}
+      {/* Skills Chart Section */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart2 className="h-6 w-6 text-blue-600" />
+          <h2 className="text-xl font-semibold text-gray-800">Skills Overview</h2>
         </div>
+        {skillData.length > 0 ? (
+          <SkillChart data={skillData} />
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No skill data available. Add certificates to see your skills distribution.
+          </div>
+        )}
       </div>
 
       {/* Certificates Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-4">Certificates</h2>
-        {certificates.length === 0 ? (
-          <p className="text-gray-500">No certificates uploaded yet.</p>
-        ) : (
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Award className="h-6 w-6 text-blue-600" />
+          <h2 className="text-xl font-semibold text-gray-800">Certificates</h2>
+        </div>
+        
+        {certificates.length > 0 ? (
           <div className="space-y-4">
             {certificates.map((cert) => (
               <div
                 key={cert._id}
-                className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-medium text-lg">{cert.name}</h3>
+                    <h3 className="font-medium text-lg text-gray-900">{cert.name}</h3>
                     <p className="text-gray-600">{cert.issuer}</p>
                     <p className="text-sm text-gray-500">
                       Issued on: {new Date(cert.dateIssued).toLocaleDateString()}
@@ -91,7 +114,7 @@ const UserSkills: React.FC = () => {
                       {cert.skills.map((skill) => (
                         <span
                           key={skill}
-                          className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs"
+                          className="px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium"
                         >
                           {skill}
                         </span>
@@ -116,6 +139,10 @@ const UserSkills: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            No certificates found. Add your first certificate to get started.
           </div>
         )}
       </div>
