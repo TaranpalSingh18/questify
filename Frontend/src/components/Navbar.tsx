@@ -1,12 +1,13 @@
 // src/components/Navbar.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown } from 'lucide-react';
+import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CiCoins1 } from "react-icons/ci";
 import Leaderboard from './Leaderboard';
 import SubscriptionPlans from './SubscriptionPlans';
 import Chat from './Chat';
+import Notification from './Notification';
 
 const Navbar: React.FC = () => {
   const { currentUser, isAuthenticated, logout } = useAuth();
@@ -15,10 +16,17 @@ const Navbar: React.FC = () => {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
   };
 
   useEffect(() => {
@@ -53,6 +61,49 @@ const Navbar: React.FC = () => {
       return () => ws.close();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchUnreadCount();
+    // Set up WebSocket connection for real-time notifications
+    const ws = new WebSocket('ws://localhost:5000');
+    
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      if (currentUser) {
+        const token = localStorage.getItem('token');
+        ws.send(JSON.stringify({
+          type: 'auth',
+          token
+        }));
+      }
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'notification') {
+        fetchUnreadCount();
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [currentUser]);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/notifications/unread/count', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch unread count');
+      const data = await response.json();
+      setUnreadCount(data.count);
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
 
   return (
     <>
@@ -102,8 +153,20 @@ const Navbar: React.FC = () => {
                     <span className="text-sm font-medium">Upgrade</span>
                   </button>
              
-                  <button className="ml-4 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none">
+                  <button 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsNotificationOpen(true);
+                    }}
+                    className="ml-4 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none relative"
+                  >
                     <Bell className="h-6 w-6" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {unreadCount}
+                      </span>
+                    )}
                   </button>
                   <button 
                     onClick={() => setShowChat(true)}
@@ -210,8 +273,88 @@ const Navbar: React.FC = () => {
         </div>
       )}
 
+      {/* Notification Modal */}
+      {isNotificationOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex overflow-hidden">
+            <div className="flex-1 flex flex-col bg-white">
+              <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
+                <button
+                  onClick={() => setIsNotificationOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-500 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <Notification onClose={() => setIsNotificationOpen(false)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chat Modal */}
-      {showChat && <Chat onClose={() => setShowChat(false)} />}
+      {showChat && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex overflow-hidden">
+            <div className="flex-1 flex flex-col bg-white">
+              <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
+                <button
+                  onClick={() => setShowChat(false)}
+                  className="p-2 text-gray-400 hover:text-gray-500 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <Chat onClose={() => setShowChat(false)} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile menu */}
+      {isMenuOpen && (
+        <div className="sm:hidden">
+          <div className="px-2 pt-2 pb-3 space-y-1">
+            {currentUser ? (
+              <>
+                <Link
+                  to="/profile"
+                  className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium"
+                >
+                  Profile
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="text-gray-500 hover:text-gray-700 block w-full text-left px-3 py-2 rounded-md text-base font-medium"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="bg-blue-600 text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Register
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 };

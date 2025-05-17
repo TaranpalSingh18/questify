@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, X } from 'lucide-react';
+import { Bell, X, Coins } from 'lucide-react';
 import { format } from 'date-fns';
-import coinGif from '../assets/coin.gif';
 
 interface Notification {
   _id: string;
@@ -19,6 +18,7 @@ interface NotificationProps {
 const Notification: React.FC<NotificationProps> = ({ onClose }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -26,16 +26,29 @@ const Notification: React.FC<NotificationProps> = ({ onClose }) => {
 
   const fetchNotifications = async () => {
     try {
+      setError(null);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please log in to view notifications');
+        setIsLoading(false);
+        return;
+      }
+
       const response = await fetch('http://localhost:5000/api/notifications', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
-      if (!response.ok) throw new Error('Failed to fetch notifications');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch notifications');
+      }
+
       const data = await response.json();
       setNotifications(data);
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      setError('Failed to load notifications. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -43,12 +56,20 @@ const Notification: React.FC<NotificationProps> = ({ onClose }) => {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark notification as read');
+      }
+
       setNotifications(prev =>
         prev.map(notification =>
           notification._id === notificationId
@@ -66,8 +87,8 @@ const Notification: React.FC<NotificationProps> = ({ onClose }) => {
       case 'login':
       case 'certificate':
         return (
-          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-            <img src={coinGif} alt="Coin" className="w-8 h-8" />
+          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center animate-pulse">
+            <Coins className="h-6 w-6 text-yellow-600" />
           </div>
         );
       case 'quest':
@@ -88,62 +109,56 @@ const Notification: React.FC<NotificationProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No notifications yet
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {notifications.map((notification) => (
-                <div
-                  key={notification._id}
-                  className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-                    !notification.read ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => markAsRead(notification._id)}
-                >
-                  <div className="flex items-start gap-3">
-                    {getNotificationIcon(notification.type)}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">
-                        {notification.message}
-                        {notification.coins && (
-                          <span className="ml-1 text-yellow-600 font-medium">
-                            +{notification.coins} coins
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {format(new Date(notification.timestamp), 'MMM d, h:mm a')}
-                      </p>
-                    </div>
-                    {!notification.read && (
-                      <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+      ) : error ? (
+        <div className="text-center py-8 text-red-500">
+          {error}
+        </div>
+      ) : notifications.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-gray-50">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+            <Bell className="h-8 w-8 text-blue-600" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications yet</h3>
+          <p className="text-sm text-gray-500">You'll see your notifications here when they arrive</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {notifications.map((notification) => (
+            <div
+              key={notification._id}
+              className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                !notification.read ? 'bg-blue-50' : ''
+              }`}
+              onClick={() => markAsRead(notification._id)}
+            >
+              <div className="flex items-start gap-3">
+                {getNotificationIcon(notification.type)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900">
+                    {notification.message}
+                    {notification.coins && (
+                      <span className="ml-1 text-yellow-600 font-medium">
+                        +{notification.coins} coins
+                      </span>
                     )}
-                  </div>
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {format(new Date(notification.timestamp), 'MMM d, h:mm a')}
+                  </p>
                 </div>
-              ))}
+                {!notification.read && (
+                  <div className="w-2 h-2 rounded-full bg-blue-600"></div>
+                )}
+              </div>
             </div>
-          )}
+          ))}
         </div>
-      </div>
+      )}
     </div>
   );
 };
