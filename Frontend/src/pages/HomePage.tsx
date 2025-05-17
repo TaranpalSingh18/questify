@@ -10,7 +10,7 @@ import SubscriptionPlans from '../components/SubscriptionPlans';
 
 const HomePage: React.FC = () => {
   const { isAuthenticated, currentUser } = useAuth();
-  const { quests } = useQuests();
+  const { quests, loading, error } = useQuests();
   const [filteredQuests, setFilteredQuests] = useState(quests);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -49,8 +49,30 @@ const HomePage: React.FC = () => {
   // Get all unique skills from quests
   const allSkills = Array.from(new Set(quests.flatMap(quest => quest.skills))).sort();
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex justify-center items-center min-h-[calc(100vh-64px)]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex justify-center items-center min-h-[calc(100vh-64px)]">
+          <div className="text-red-600">Error loading quests: {error}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <main className="pt-16 pb-12">
@@ -89,7 +111,7 @@ const HomePage: React.FC = () => {
               <h2 className="text-3xl font-bold text-gray-900 mb-8">Featured Quests</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
                 {quests.slice(0, 3).map(quest => (
-                  <QuestCard key={quest.id} quest={quest} />
+                  <QuestCard key={quest._id} quest={quest} />
                 ))}
               </div>
 
@@ -191,37 +213,11 @@ const HomePage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="bg-white p-4 rounded-lg shadow-sm mb-6 flex items-center justify-between">
-                  <div className="flex items-center text-blue-600">
-                    <TrendingUp className="h-5 w-5 mr-2" />
-                    <span className="font-medium">Trending Quests</span>
-                  </div>
-                  <Link to="/trending" className="text-sm text-blue-600 hover:text-blue-800">
-                    View all
-                  </Link>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredQuests.map(quest => (
+                    <QuestCard key={quest._id} quest={quest} />
+                  ))}
                 </div>
-                
-                {filteredQuests.length > 0 ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {filteredQuests.map(quest => (
-                      <QuestCard key={quest.id} quest={quest} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-white p-8 rounded-lg shadow-sm text-center">
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No quests found</h3>
-                    <p className="text-gray-500 mb-4">Try adjusting your search or filters</p>
-                    <button 
-                      onClick={() => {
-                        setSearchTerm('');
-                        setSelectedSkills([]);
-                      }}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Clear all filters
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>

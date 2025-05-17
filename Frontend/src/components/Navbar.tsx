@@ -93,9 +93,11 @@ const Navbar: React.FC = () => {
                         <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                           Your Profile
                         </Link>
-                        <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          Dashboard
-                        </Link>
+                        {currentUser?.role === 'hirer' && (
+                          <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            Dashboard
+                          </Link>
+                        )}
                         <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                           Settings
                         </Link>

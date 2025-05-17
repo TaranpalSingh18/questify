@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Quest, Submission } from '../types';
 import { mockQuests } from '../data/mockData';
 
@@ -8,18 +8,77 @@ interface QuestContextType {
   getQuestById: (id: string) => Quest | undefined;
   getSubmissionsByQuestId: (questId: string) => Submission[];
   getSubmissionsByUserId: (userId: string) => Submission[];
-  createQuest: (quest: Omit<Quest, 'id' | 'postedAt' | 'applicants'>) => void;
+  createQuest: (quest: Omit<Quest, '_id' | 'postedAt' | 'applicants'>) => void;
   submitToQuest: (submission: Omit<Submission, 'id' | 'submittedAt' | 'status'>) => void;
+  loading: boolean;
+  error: string | null;
+  refreshQuests: () => Promise<void>;
 }
 
 const QuestContext = createContext<QuestContextType | undefined>(undefined);
 
 export const QuestProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [quests, setQuests] = useState<Quest[]>(mockQuests);
+  const [quests, setQuests] = useState<Quest[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchQuests = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/quests');
+      if (!response.ok) {
+        throw new Error('Failed to fetch quests');
+      }
+      const data = await response.json();
+      setQuests(data);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch quests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshQuests = async () => {
+    setLoading(true);
+    await fetchQuests();
+  };
+
+  useEffect(() => {
+    fetchQuests();
+
+    // Set up WebSocket connection for real-time updates
+    const ws = new WebSocket('ws://localhost:5000');
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      switch (data.type) {
+        case 'NEW_QUEST':
+          setQuests(prev => [...prev, data.quest]);
+          break;
+        case 'QUEST_UPDATED':
+          setQuests(prev => prev.map(quest => 
+            quest._id === data.quest._id ? data.quest : quest
+          ));
+          break;
+        case 'QUEST_DELETED':
+          setQuests(prev => prev.filter(quest => quest._id !== data.questId));
+          break;
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
 
   const getQuestById = (id: string): Quest | undefined => {
-    return quests.find(quest => quest.id === id);
+    return quests.find(quest => quest._id === id);
   };
 
   const getSubmissionsByQuestId = (questId: string): Submission[] => {
@@ -30,10 +89,10 @@ export const QuestProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return submissions.filter(submission => submission.userId === userId);
   };
 
-  const createQuest = (quest: Omit<Quest, 'id' | 'postedAt' | 'applicants'>) => {
+  const createQuest = (quest: Omit<Quest, '_id' | 'postedAt' | 'applicants'>) => {
     const newQuest: Quest = {
       ...quest,
-      id: `${quests.length + 1}`,
+      _id: `${quests.length + 1}`,
       postedAt: new Date().toISOString(),
       applicants: 0
     };
@@ -65,7 +124,10 @@ export const QuestProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       getSubmissionsByQuestId, 
       getSubmissionsByUserId, 
       createQuest, 
-      submitToQuest 
+      submitToQuest,
+      loading,
+      error,
+      refreshQuests
     }}>
       {children}
     </QuestContext.Provider>

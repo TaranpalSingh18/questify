@@ -3,6 +3,8 @@ import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { PlusCircle, FileText, Users } from "lucide-react";
+import { useQuests } from '../context/QuestContext';
+import { QuestFormData } from '../types/quest';
 
 interface Quest {
   _id: string;
@@ -21,14 +23,23 @@ interface Submission {
 
 const HirerDashboard: React.FC = () => {
   const { currentUser } = useAuth();
+  const { refreshQuests } = useQuests();
   const navigate = useNavigate();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [newQuest, setNewQuest] = useState({
-    title: "",
-    description: "",
-    budget: "",
-    deadline: ""
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState<QuestFormData>({
+    title: '',
+    company: '',
+    companyLogo: '',
+    description: '',
+    requirements: [],
+    skills: [],
+    deadline: '',
+    compensation: '',
+    location: '',
+    remote: false,
   });
   const [activeTab, setActiveTab] = useState("posted");
 
@@ -59,34 +70,102 @@ const HirerDashboard: React.FC = () => {
     }
   };
 
-  const handlePostQuest = async () => {
-    try {
-      const questData = {
-        title: newQuest.title,
-        description: newQuest.description,
-        budget: newQuest.budget ? parseFloat(newQuest.budget) : undefined,
-        deadline: newQuest.deadline || undefined
-      };
-      
-      const response = await axios.post("http://localhost:5000/api/quests", questData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      
-      setQuests([...quests, response.data]);
-      setNewQuest({ title: "", description: "", budget: "", deadline: "" });
-    } catch (error) {
-      console.error("Error posting quest:", error);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    if (name === 'skills' || name === 'requirements') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value.split(',').map(item => item.trim()).filter(Boolean)
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
+      }));
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target;
-    setNewQuest({ ...newQuest, [id]: value });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Validate required fields
+      if (!formData.title || !formData.company || !formData.description || !formData.deadline || !formData.location) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Format the data to match the Quest model
+      const questData = {
+        title: formData.title,
+        company: formData.company,
+        companyLogo: formData.companyLogo || undefined,
+        description: formData.description,
+        requirements: formData.requirements,
+        skills: formData.skills,
+        deadline: new Date(formData.deadline).toISOString(),
+        compensation: formData.compensation || undefined,
+        location: formData.location,
+        remote: formData.remote,
+        postedBy: currentUser?._id, // Add the user ID
+      };
+
+      console.log('Sending quest data:', questData);
+
+      const response = await fetch('http://localhost:5000/api/quests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`, // Add authorization header
+        },
+        body: JSON.stringify(questData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create quest');
+      }
+
+      const data = await response.json();
+      console.log('Quest created:', data);
+
+      // Refresh the quests list
+      await refreshQuests();
+      
+      // Reset form and navigate
+      setFormData({
+        title: '',
+        company: '',
+        companyLogo: '',
+        description: '',
+        requirements: [],
+        skills: [],
+        deadline: '',
+        compensation: '',
+        location: '',
+        remote: false,
+      });
+      navigate('/');
+    } catch (err) {
+      console.error('Error creating quest:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create quest');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
+
+  if (!currentUser || currentUser.role !== 'hirer') {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p className="text-xl text-gray-600">Access denied. Hirer account required.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -117,70 +196,121 @@ const HirerDashboard: React.FC = () => {
             <p className="text-sm text-gray-500 mt-1">Create a new quest for freelancers to complete</p>
           </div>
           <div className="p-6">
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handlePostQuest(); }}>
-              <div className="space-y-2">
-                <label htmlFor="title" className="text-sm font-medium">
-                  Quest Title
-                </label>
-                <input
-                  id="title"
-                  value={newQuest.title}
-                  onChange={handleInputChange}
-                  placeholder="Enter a descriptive title for your quest"
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
+                {error}
               </div>
-              <div className="space-y-2">
-                <label htmlFor="description" className="text-sm font-medium">
-                  Quest Description
+            )}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quest Title *
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="company"
+                    value={formData.company}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Deadline *
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="deadline"
+                    value={formData.deadline}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Location *
+                  </label>
+                  <input
+                    type="text"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Compensation
+                  </label>
+                  <input
+                    type="text"
+                    name="compensation"
+                    value={formData.compensation}
+                    onChange={handleInputChange}
+                    placeholder="e.g., $50,000 - $70,000"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description *
                 </label>
                 <textarea
-                  id="description"
-                  value={newQuest.description}
+                  name="description"
+                  value={formData.description}
                   onChange={handleInputChange}
-                  placeholder="Describe the requirements, deliverables, and any other important details"
-                  rows={4}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="budget" className="text-sm font-medium">
-                    Budget
-                  </label>
-                  <input
-                    id="budget"
-                    value={newQuest.budget}
-                    onChange={handleInputChange}
-                    placeholder="$"
-                    type="number"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="deadline" className="text-sm font-medium">
-                    Deadline
-                  </label>
-                  <input
-                    id="deadline"
-                    value={newQuest.deadline}
-                    onChange={handleInputChange}
-                    type="date"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="remote"
+                  checked={formData.remote}
+                  onChange={(e) => setFormData(prev => ({ ...prev, remote: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700">
+                  This is a remote position
+                </label>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium disabled:opacity-50"
+                >
+                  {loading ? 'Posting...' : 'Post Quest'}
+                </button>
               </div>
             </form>
-          </div>
-          <div className="border-t border-gray-200 p-6 flex justify-end">
-            <button 
-              onClick={handlePostQuest}
-              className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-full sm:w-auto"
-            >
-              Post Quest
-            </button>
           </div>
         </div>
 

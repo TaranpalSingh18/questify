@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, DollarSign, AlertCircle } from 'lucide-react';
+import { Calendar, MapPin, DollarSign, AlertCircle, Building } from 'lucide-react';
 import { useQuests } from '../context/QuestContext';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
@@ -12,6 +12,7 @@ const CreateQuestPage: React.FC = () => {
   const navigate = useNavigate();
   
   const [title, setTitle] = useState('');
+  const [company, setCompany] = useState('');
   const [description, setDescription] = useState('');
   const [requirements, setRequirements] = useState<string[]>(['']);
   const [skills, setSkills] = useState<string[]>([]);
@@ -62,7 +63,7 @@ const CreateQuestPage: React.FC = () => {
       return;
     }
     
-    if (!title || !description || !deadline || !location || skills.length === 0) {
+    if (!title || !company || !description || !deadline || !location || skills.length === 0) {
       setError('Please fill in all required fields');
       return;
     }
@@ -80,7 +81,7 @@ const CreateQuestPage: React.FC = () => {
     try {
       createQuest({
         title,
-        company: currentUser.company || 'Unknown Company',
+        company,
         description,
         requirements: filteredRequirements,
         skills,
@@ -131,6 +132,24 @@ const CreateQuestPage: React.FC = () => {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g., Build a Responsive Landing Page"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="company" className="block text-sm font-medium text-gray-700 mb-1">
+                    <div className="flex items-center">
+                      <Building className="h-4 w-4 mr-1" />
+                      <span>Company Name *</span>
+                    </div>
+                  </label>
+                  <input
+                    type="text"
+                    id="company"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder="Enter your company name"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -195,8 +214,8 @@ const CreateQuestPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Quest Details</h2>
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Additional Details</h2>
               
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -289,7 +308,7 @@ const CreateQuestPage: React.FC = () => {
             </div>
           </form>
         </div>
-       </main>
+      </main>
     </div>
   );
 };

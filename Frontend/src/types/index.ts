@@ -1,23 +1,7 @@
-export type UserRole = 'hirer' | 'job-seeker';
-
-export interface User {
-  _id: string;
-  name: string;
-  email: string;
-  password?: string;
-  role: UserRole;
-  profilePicture?: string;
-  title?: string;
-  company?: string;
-  skills?: string[];
-  interests?: string[];
-}
-
 export interface Quest {
   _id: string;
   title: string;
   company: string;
-  companyLogo?: string;
   description: string;
   requirements: string[];
   skills: string[];
@@ -27,7 +11,7 @@ export interface Quest {
   remote: boolean;
   postedBy: string;
   postedAt: string;
-  applicants?: number;
+  applicants: number;
 }
 
 export interface Submission {
@@ -36,7 +20,7 @@ export interface Submission {
   userId: string;
   videoDemo: string;
   githubLink: string;
-  description: string;
+  description?: string;
   submittedAt: string;
-  status: 'pending' | 'approved' | 'rejected';
-}
+  status: 'pending' | 'accepted' | 'rejected';
+} 
