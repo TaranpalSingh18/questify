@@ -40,6 +40,7 @@ const initializeWebSocket = (server) => {
 
             // Store the connection with user ID
             userId = decoded.userId;
+            ws.userId = userId; // Add userId to the WebSocket instance
             clients.set(userId, ws);
             console.log(`User ${user.name} authenticated and connected`);
           } catch (error) {

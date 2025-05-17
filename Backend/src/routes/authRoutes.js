@@ -1,11 +1,27 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const WebSocket = require('ws');
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const { body, validationResult } = require("express-validator");
+const { getWebSocketServer } = require("../utils/chatWebSocket");
 require("dotenv").config();
 
 const router = express.Router();
+
+// Helper function to send notification
+const sendNotification = (userId, notification) => {
+  const wss = getWebSocketServer();
+  wss.clients.forEach((client) => {
+    if (client.userId === userId && client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({
+        type: 'notification',
+        notification
+      }));
+    }
+  });
+};
 
 // Signup route
 router.post(
@@ -96,6 +112,18 @@ router.post(
         return res.status(400).json({ message: "Invalid credentials" });
       }
 
+      // Create login notification
+      const notification = new Notification({
+        user: user._id,
+        type: "login",
+        message: "Welcome back! You earned 1 coin for logging in.",
+        coins: 1
+      });
+      await notification.save();
+
+      // Send real-time notification
+      sendNotification(user._id, notification);
+
       // Add login bonus
       user.coins += 1;
       await user.save();
@@ -104,7 +132,7 @@ router.post(
       const token = jwt.sign(
         { id: user._id, role: user.role },
         process.env.JWT_SECRET,
-        { expiresIn: "24h" }
+        { expiresIn: "7d" }
       );
 
       res.json({
@@ -114,12 +142,13 @@ router.post(
           name: user.name,
           email: user.email,
           role: user.role,
+          profilePicture: user.profilePicture,
           coins: user.coins,
         },
       });
     } catch (error) {
       console.error("Login error:", error);
-      res.status(500).json({ message: "Error in login" });
+      res.status(500).json({ message: "Server error" });
     }
   }
 );
