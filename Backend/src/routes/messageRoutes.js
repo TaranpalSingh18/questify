@@ -110,4 +110,40 @@ router.get('/unread/count', protect, async (req, res) => {
   }
 });
 
+// Save new message
+router.post('/', auth, async (req, res) => {
+  try {
+    console.log('Saving new message:', req.body);
+    
+    const { sender, receiver, content, timestamp } = req.body;
+
+    // Validate required fields
+    if (!sender || !receiver || !content) {
+      console.error('Missing required fields:', { sender, receiver, content });
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Create new message
+    const newMessage = new Message({
+      sender,
+      receiver,
+      content,
+      timestamp: timestamp || new Date(),
+      read: false
+    });
+
+    // Save message to database
+    const savedMessage = await newMessage.save();
+    console.log('Message saved successfully:', savedMessage);
+
+    res.status(201).json(savedMessage);
+  } catch (error) {
+    console.error('Error saving message:', error);
+    res.status(500).json({ 
+      message: 'Error saving message',
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router; 

@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const mongoose = require('mongoose');
 
 let wss;
 const clients = new Map(); // Map to store user connections
@@ -41,7 +42,7 @@ const initializeWebSocket = (server) => {
             // Store the connection with user ID
             userId = decoded.userId;
             ws.userId = userId; // Add userId to the WebSocket instance
-            clients.set(userId, ws);
+            clients.set(userId.toString(), ws);
             console.log(`User ${user.name} authenticated and connected`);
           } catch (error) {
             console.error('Auth error:', error);
@@ -60,9 +61,9 @@ const initializeWebSocket = (server) => {
           });
 
           // Store the chat session
-          const sessionId = [userId, partnerId].sort().join('_');
+          const sessionId = [userId.toString(), partnerId.toString()].sort().join('_');
           chatSessions.set(sessionId, {
-            participants: [userId, partnerId],
+            participants: [userId.toString(), partnerId.toString()],
             active: true,
             startTime: new Date()
           });
@@ -74,7 +75,7 @@ const initializeWebSocket = (server) => {
           const sessionMessage = {
             type: 'chat_session',
             sessionId,
-            participants: [userId, partnerId]
+            participants: [userId.toString(), partnerId.toString()]
           };
 
           // Send to current user
@@ -82,7 +83,7 @@ const initializeWebSocket = (server) => {
           console.log('Session notification sent to current user');
 
           // Send to partner if connected
-          const partnerConnection = clients.get(partnerId);
+          const partnerConnection = clients.get(partnerId.toString());
           if (partnerConnection) {
             partnerConnection.send(JSON.stringify(sessionMessage));
             console.log('Session notification sent to partner');
@@ -93,15 +94,19 @@ const initializeWebSocket = (server) => {
           console.log('Processing message type...');
           const { message: messageData } = data;
           
+          // Convert string IDs to ObjectIds for comparison
+          const senderId = new mongoose.Types.ObjectId(messageData.sender);
+          const receiverId = new mongoose.Types.ObjectId(messageData.receiver);
+          
           // Verify this is an active chat session
-          const sessionId = [messageData.sender, messageData.receiver].sort().join('_');
+          const sessionId = [senderId.toString(), receiverId.toString()].sort().join('_');
           const session = chatSessions.get(sessionId);
           
           if (!session || !session.active) {
             console.log('No active chat session found, attempting to start one...');
             // Try to start a chat session automatically
             chatSessions.set(sessionId, {
-              participants: [messageData.sender, messageData.receiver],
+              participants: [senderId.toString(), receiverId.toString()],
               active: true,
               startTime: new Date()
             });
@@ -110,14 +115,14 @@ const initializeWebSocket = (server) => {
 
           console.log('Processing message:', {
             sessionId,
-            sender: messageData.sender,
-            receiver: messageData.receiver,
+            sender: senderId,
+            receiver: receiverId,
             content: messageData.content,
             timestamp: messageData.timestamp
           });
 
           // Verify the sender is the authenticated user
-          if (messageData.sender !== userId) {
+          if (senderId.toString() !== userId.toString()) {
             console.log('Unauthorized message attempt');
             return;
           }
@@ -125,16 +130,9 @@ const initializeWebSocket = (server) => {
           try {
             // Save message to database
             console.log('=== MESSAGE SAVE ATTEMPT ===');
-            console.log('Message data:', {
-              sender: messageData.sender,
-              receiver: messageData.receiver,
-              content: messageData.content,
-              timestamp: messageData.timestamp
-            });
-
             const newMessage = new Message({
-              sender: messageData.sender,
-              receiver: messageData.receiver,
+              sender: senderId,
+              receiver: receiverId,
               content: messageData.content,
               timestamp: messageData.timestamp
             });
@@ -148,23 +146,7 @@ const initializeWebSocket = (server) => {
 
             console.log('Message validation passed, attempting to save...');
             const savedMessage = await newMessage.save();
-            console.log('✅ Message saved successfully:', {
-              id: savedMessage._id,
-              sender: savedMessage.sender,
-              receiver: savedMessage.receiver,
-              content: savedMessage.content,
-              timestamp: savedMessage.timestamp,
-              read: savedMessage.read
-            });
-
-            // Verify the message was saved by querying it
-            console.log('Verifying message in database...');
-            const verifiedMessage = await Message.findById(savedMessage._id);
-            if (!verifiedMessage) {
-              console.error('❌ Message not found in database after saving');
-              throw new Error('Message not found after save');
-            }
-            console.log('✅ Message verified in database:', verifiedMessage);
+            console.log('✅ Message saved successfully:', savedMessage);
 
             // Send message only to the sender and receiver
             const messageToSend = {
@@ -173,20 +155,22 @@ const initializeWebSocket = (server) => {
             };
 
             // Send to sender (current connection)
-            ws.send(JSON.stringify(messageToSend));
-            console.log('Message sent to sender:', messageData.sender);
+            if (ws.userId === savedMessage.sender.toString()) {
+              ws.send(JSON.stringify(messageToSend));
+              console.log('Message sent to sender:', savedMessage.sender);
+            }
 
             // Send to receiver if they're connected
-            const receiverConnection = clients.get(messageData.receiver);
+            const receiverConnection = clients.get(savedMessage.receiver.toString());
             if (receiverConnection) {
               receiverConnection.send(JSON.stringify(messageToSend));
-              console.log('Message sent to receiver:', messageData.receiver);
+              console.log('Message sent to receiver:', savedMessage.receiver);
             }
 
             // Count unread messages for receiver
             const unreadCount = await Message.countDocuments({
-              receiver: messageData.receiver,
-              sender: messageData.sender,
+              receiver: receiverId,
+              sender: senderId,
               read: false
             });
 
@@ -209,7 +193,7 @@ const initializeWebSocket = (server) => {
         } else if (data.type === 'end_chat') {
           // Handle ending a chat session
           if (currentChatPartner) {
-            const sessionId = [userId, currentChatPartner].sort().join('_');
+            const sessionId = [userId.toString(), currentChatPartner.toString()].sort().join('_');
             chatSessions.delete(sessionId);
             currentChatPartner = null;
             console.log(`Chat session ended between ${userId} and ${currentChatPartner}`);
@@ -225,12 +209,12 @@ const initializeWebSocket = (server) => {
       if (userId) {
         // Clean up any active chat sessions
         for (const [sessionId, session] of chatSessions.entries()) {
-          if (session.participants.includes(userId)) {
+          if (session.participants.includes(userId.toString())) {
             chatSessions.delete(sessionId);
             console.log(`Chat session ${sessionId} ended due to disconnection`);
           }
         }
-        clients.delete(userId);
+        clients.delete(userId.toString());
         console.log(`User ${userId} disconnected`);
       }
     });
