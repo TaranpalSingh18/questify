@@ -5,6 +5,9 @@ import { useAuth } from '../context/AuthContext';
 import { useQuests } from '../context/QuestContext';
 import Navbar from '../components/Navbar';
 import SkillSelector from '../components/SkillSelector';
+import SkillChart from '../components/SkillChart';
+import InterestChart from '../components/InterestChart';
+import { Submission } from '../types';
 import axios from 'axios';
 
 const ProfilePage: React.FC = () => {
@@ -457,33 +460,16 @@ const ProfilePage: React.FC = () => {
                         >
                           Cancel
                         </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await updateUserProfile({
-                                ...currentUser,
-                                skills
-                              });
-                              setIsEditing(false);
-                            } catch (error) {
-                              console.error('Error updating skills:', error);
-                              alert('Failed to update skills. Please try again.');
-                            }
-                          }}
-                          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Save Skills
-                        </button>
                       </div>
                     </div>
                   ) : (
-                    <div>
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {currentUser?.skills && currentUser.skills.length > 0 ? (
-                          currentUser.skills.map((skill, index) => (
+                    <>
+                      <div className="flex flex-wrap gap-2 mb-6">
+                        {currentUser.skills && currentUser.skills.length > 0 ? (
+                          currentUser.skills.map((skill: string, index: number) => (
                             <span 
                               key={index} 
-                              className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm"
+                              className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
                             >
                               {skill}
                             </span>
@@ -492,14 +478,17 @@ const ProfilePage: React.FC = () => {
                           <p className="text-gray-500 text-sm">No skills added yet</p>
                         )}
                       </div>
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
-                      >
-                        <Edit2 className="h-4 w-4 mr-1" />
-                        Edit Skills
-                      </button>
-                    </div>
+                      {currentUser.skills && currentUser.skills.length > 0 && (
+                        <div className="mt-6">
+                          <SkillChart 
+                            data={currentUser.skills.map((skill: string) => ({
+                              name: skill,
+                              value: 1 // For now, we're using a simple value of 1 for each skill
+                            }))}
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                   
                   <div className="mt-8">
@@ -523,20 +512,32 @@ const ProfilePage: React.FC = () => {
                         ]}
                       />
                     ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {currentUser.interests && currentUser.interests.length > 0 ? (
-                          currentUser.interests.map((interest, index) => (
-                            <span 
-                              key={index} 
-                              className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
-                            >
-                              {interest}
-                            </span>
-                          ))
-                        ) : (
-                          <p className="text-gray-500 text-sm">No interests added yet</p>
+                      <>
+                        <div className="flex flex-wrap gap-2 mb-6">
+                          {currentUser.interests && currentUser.interests.length > 0 ? (
+                            currentUser.interests.map((interest: string, index: number) => (
+                              <span 
+                                key={index} 
+                                className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-sm"
+                              >
+                                {interest}
+                              </span>
+                            ))
+                          ) : (
+                            <p className="text-gray-500 text-sm">No interests added yet</p>
+                          )}
+                        </div>
+                        {currentUser.interests && currentUser.interests.length > 0 && (
+                          <div className="mt-6">
+                            <InterestChart 
+                              data={currentUser.interests.map((interest: string) => ({
+                                name: interest,
+                                value: 1 // For now, we're using a simple value of 1 for each interest
+                              }))}
+                            />
+                          </div>
                         )}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -546,8 +547,8 @@ const ProfilePage: React.FC = () => {
                   
                   {submissions.length > 0 ? (
                     <div className="space-y-4">
-                      {submissions.map((submission) => (
-                        <div key={submission.id} className="border border-gray-200 rounded-md p-4">
+                      {submissions.map((submission: Submission) => (
+                        <div key={submission._id} className="border border-gray-200 rounded-md p-4">
                           <h3 className="font-medium text-gray-900 mb-1">Quest Title</h3>
                           <p className="text-sm text-gray-500 mb-2">Submitted on {new Date(submission.submittedAt).toLocaleDateString()}</p>
                           <div className="flex space-x-2 mb-2">
