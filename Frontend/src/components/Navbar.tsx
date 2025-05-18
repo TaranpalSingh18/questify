@@ -310,7 +310,10 @@ const Navbar: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto">
-                <Chat onClose={() => setShowChat(false)} />
+                <Chat 
+                  onClose={() => setShowChat(false)} 
+                  onUnreadCountUpdate={(count) => setUnreadMessages(count)}
+                />
               </div>
             </div>
           </div>

@@ -70,8 +70,8 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
 
         // Only add message if it's specifically for the current chat
         const isMessageForCurrentChat = selectedUser && 
-          ((data.message.sender === currentUser?.id && data.message.receiver === selectedUser._id) || 
-           (data.message.sender === selectedUser._id && data.message.receiver === currentUser?.id));
+          ((data.message.sender.toString() === currentUser?.id && data.message.receiver.toString() === selectedUser._id) || 
+           (data.message.sender.toString() === selectedUser._id && data.message.receiver.toString() === currentUser?.id));
 
         console.log('Should display message:', isMessageForCurrentChat);
 
@@ -87,6 +87,30 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
             return [...prev, data.message];
           });
           scrollToBottom();
+        }
+
+        // Update last message in users list if this message is for the current user
+        if (data.message.receiver.toString() === currentUser?.id || data.message.sender.toString() === currentUser?.id) {
+          setUsers(prev => prev.map(user => {
+            const isMessageForThisUser = 
+              (data.message.sender.toString() === user._id && data.message.receiver.toString() === currentUser?.id) ||
+              (data.message.sender.toString() === currentUser?.id && data.message.receiver.toString() === user._id);
+            
+            if (isMessageForThisUser) {
+              return {
+                ...user,
+                lastMessage: data.message
+              };
+            }
+            return user;
+          }));
+        }
+      } else if (data.type === 'chat_session') {
+        // Handle chat session updates
+        console.log('Chat session update:', data);
+        if (data.sessionId) {
+          // Update the current chat session if needed
+          console.log('Chat session established:', data.sessionId);
         }
       }
     };
@@ -212,18 +236,50 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
 
   const fetchMessages = async (userId: string) => {
     try {
+      console.log('Fetching messages for user:', userId);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No token found');
+        return;
+      }
+
       const response = await fetch(`http://localhost:5000/api/messages/${userId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
-      if (!response.ok) throw new Error('Failed to fetch messages');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
+      }
+
       const data = await response.json();
-      setMessages(data);
+      console.log('Fetched messages:', data);
+
+      // Sort messages by timestamp
+      const sortedMessages = data.sort((a: Message, b: Message) => 
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+
+      setMessages(sortedMessages);
+      scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
+      alert('Failed to load messages. Please try again.');
     }
   };
+
+  // Update useEffect to fetch messages when a user is selected
+  useEffect(() => {
+    if (selectedUser) {
+      console.log('Selected user changed, fetching messages for:', selectedUser._id);
+      fetchMessages(selectedUser._id);
+    } else {
+      // Clear messages when no user is selected
+      setMessages([]);
+    }
+  }, [selectedUser]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,39 +301,46 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
         timestamp: new Date().toISOString()
       };
 
-      console.log('Sending message:', messageData);
+      console.log('Saving message to database:', messageData);
+
+      // First save message to database
+      const response = await fetch('http://localhost:5000/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(messageData)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save message to database');
+      }
+
+      const savedMessage = await response.json();
+      console.log('Message saved to database:', savedMessage);
 
       // Send message through WebSocket
       ws.current.send(JSON.stringify({
         type: 'message',
-        message: messageData
+        message: savedMessage
       }));
 
-      // Create message object for local state
-      const localMessage = {
-        _id: Date.now().toString(), // Temporary ID
-        sender: currentUser?.id,
-        receiver: selectedUser._id,
-        content: newMessage,
-        timestamp: new Date().toISOString(),
-        read: false
-      };
-
-      // Update messages state immediately
-      setMessages(prev => [...prev, localMessage]);
+      // Update messages state with the saved message
+      setMessages(prev => [...prev, savedMessage]);
 
       // Update last message in users list
       setUsers(prev => prev.map(user => 
         user._id === selectedUser._id ? {
           ...user,
-          lastMessage: localMessage
+          lastMessage: savedMessage
         } : user
       ));
 
       // Clear input
       setNewMessage('');
 
-      console.log('Message sent and added to local state:', localMessage);
+      console.log('Message sent and added to local state:', savedMessage);
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message. Please try again.');
@@ -426,43 +489,49 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                {messages.map((message, index) => {
-                  const showDate = index === 0 || 
-                    new Date(message.timestamp).toDateString() !== 
-                    new Date(messages[index - 1].timestamp).toDateString();
-                  
-                  return (
-                    <div key={message._id}>
-                      {showDate && (
-                        <div className="flex justify-center my-4">
-                          <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                            {format(new Date(message.timestamp), 'MMMM d, yyyy')}
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        className={`flex ${
-                          message.sender === currentUser?.id ? 'justify-end' : 'justify-start'
-                        }`}
-                      >
+                {messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500">No messages yet. Start the conversation!</p>
+                  </div>
+                ) : (
+                  messages.map((message, index) => {
+                    const showDate = index === 0 || 
+                      new Date(message.timestamp).toDateString() !== 
+                      new Date(messages[index - 1].timestamp).toDateString();
+                    
+                    return (
+                      <div key={message._id}>
+                        {showDate && (
+                          <div className="flex justify-center my-4">
+                            <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                              {format(new Date(message.timestamp), 'MMMM d, yyyy')}
+                            </span>
+                          </div>
+                        )}
                         <div
-                          className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                            message.sender === currentUser?.id
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-white text-gray-900 shadow-sm'
+                          className={`flex ${
+                            message.sender === currentUser?.id ? 'justify-end' : 'justify-start'
                           }`}
                         >
-                          <p className="text-sm">{message.content}</p>
-                          <p className={`text-xs mt-1 ${
-                            message.sender === currentUser?.id ? 'text-blue-100' : 'text-gray-500'
-                          }`}>
-                            {format(new Date(message.timestamp), 'h:mm a')}
-                          </p>
+                          <div
+                            className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+                              message.sender === currentUser?.id
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-900 shadow-sm'
+                            }`}
+                          >
+                            <p className="text-sm">{message.content}</p>
+                            <p className={`text-xs mt-1 ${
+                              message.sender === currentUser?.id ? 'text-blue-100' : 'text-gray-500'
+                            }`}>
+                              {format(new Date(message.timestamp), 'h:mm a')}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
                 <div ref={messagesEndRef} />
               </div>
 
