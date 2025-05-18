@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, X, Coins, ExternalLink } from 'lucide-react';
+import { Bell, Coins, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Notification {
@@ -8,6 +8,7 @@ interface Notification {
   message: string;
   coins?: number;
   timestamp: string;
+  createdAt?: string;
   read: boolean;
   submission?: {
     videoDemo: string;
@@ -23,7 +24,6 @@ interface NotificationProps {
 
 const Notification: React.FC<NotificationProps> = ({ onClose }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [ws, setWs] = useState<WebSocket | null>(null);
 
@@ -136,20 +136,20 @@ const Notification: React.FC<NotificationProps> = ({ onClose }) => {
       case 'login':
       case 'certificate':
         return (
-          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-            <Coins className="h-6 w-6 text-yellow-600" />
+          <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+            <Coins className="h-7 w-7 text-yellow-600" />
           </div>
         );
       case 'quest':
         return (
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-            <Bell className="h-6 w-6 text-blue-600" />
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+            <Bell className="h-7 w-7 text-blue-600" />
           </div>
         );
       case 'message':
         return (
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-            <Bell className="h-6 w-6 text-green-600" />
+          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+            <Bell className="h-7 w-7 text-green-600" />
           </div>
         );
       default:
@@ -161,102 +161,74 @@ const Notification: React.FC<NotificationProps> = ({ onClose }) => {
     if (!submission) return null;
     
     return (
-      <div className="mt-2 space-y-2 text-sm">
-        <p className="text-gray-600">Submitted by: {submission.seekerName}</p>
-        <div className="space-y-1">
+      <div className="mt-3 space-y-3 text-sm">
+        <p className="text-gray-600 text-base">Submitted by: {submission.seekerName}</p>
+        <div className="space-y-2">
           <a
             href={submission.videoDemo}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center text-blue-600 hover:text-blue-800"
+            className="flex items-center text-blue-600 hover:text-blue-800 text-base"
           >
-            <ExternalLink className="h-4 w-4 mr-1" />
+            <ExternalLink className="h-5 w-5 mr-2" />
             Video Demo
           </a>
           <a
             href={submission.githubLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center text-blue-600 hover:text-blue-800"
+            className="flex items-center text-blue-600 hover:text-blue-800 text-base"
           >
-            <ExternalLink className="h-4 w-4 mr-1" />
+            <ExternalLink className="h-5 w-5 mr-2" />
             GitHub Repository
           </a>
         </div>
-        <p className="text-gray-700 mt-2">{submission.description}</p>
+        <p className="text-gray-700 mt-3 text-base">{submission.description}</p>
       </div>
     );
   };
 
-  const hasUnreadNotifications = notifications.some(n => !n.read);
-
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-800 focus:outline-none"
-      >
-        <Bell className="h-6 w-6" />
-        {hasUnreadNotifications && (
-          <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500" />
-        )}
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg -ml-200">
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-gray-400 hover:text-gray-500"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="max-h-96 overflow-y-auto">
-            {isLoading ? (
-              <div className="p-4 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-500 mt-2">Loading notifications...</p>
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                <Bell className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p>No notifications yet</p>
-                <p className="text-sm mt-1">You'll see your notifications here when they arrive</p>
-              </div>
-            ) : (
-              notifications.map((notification) => (
-                <div
-                  key={notification._id}
-                  className={`p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer ${
-                    !notification.read ? 'bg-blue-50' : ''
-                  }`}
-                  onClick={() => markAsRead(notification._id)}
-                >
-                  <div className="flex items-start space-x-3">
-                    {getNotificationIcon(notification.type)}
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900">{notification.message}</p>
-                      {notification.submission && renderSubmissionDetails(notification.submission)}
-                      <p className="text-xs text-gray-500 mt-1">
-                        {format(new Date(notification.timestamp || notification.createdAt), 'MMM d, yyyy h:mm a')}
-                      </p>
-                      {notification.coins && (
-                        <p className="text-xs text-yellow-600 mt-1">
-                          +{notification.coins} coins
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+    <>
+      {isLoading ? (
+        <div className="col-span-2 p-6 text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-500 mt-3 text-base">Loading notifications...</p>
         </div>
+      ) : notifications.length === 0 ? (
+        <div className="col-span-2 p-6 text-center text-gray-500">
+          <Bell className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+          <p className="text-lg">No notifications yet</p>
+          <p className="text-base mt-2">You'll see your notifications here when they arrive</p>
+        </div>
+      ) : (
+        notifications.map((notification) => (
+          <div
+            key={notification._id}
+            className={`bg-white rounded-lg border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow p-6 cursor-pointer ${
+              !notification.read ? 'bg-blue-50 border-blue-100' : ''
+            }`}
+            onClick={() => markAsRead(notification._id)}
+          >
+            <div className="flex items-start space-x-4">
+              {getNotificationIcon(notification.type)}
+              <div className="flex-1 min-w-0">
+                <p className="text-base text-gray-900">{notification.message}</p>
+                {notification.submission && renderSubmissionDetails(notification.submission)}
+                <p className="text-sm text-gray-500 mt-2">
+                  {format(new Date(notification.timestamp || notification.createdAt || new Date()), 'MMM d, yyyy h:mm a')}
+                </p>
+                {notification.coins && (
+                  <p className="text-sm text-yellow-600 mt-2 font-medium">
+                    +{notification.coins} coins
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))
       )}
-    </div>
+    </>
   );
 };
 

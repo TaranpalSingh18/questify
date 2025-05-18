@@ -153,7 +153,7 @@ const Navbar: React.FC = () => {
                     <span className="text-sm font-medium">Upgrade</span>
                   </button>
              
-                  <button 
+                  <button
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -275,20 +275,22 @@ const Navbar: React.FC = () => {
 
       {/* Notification Modal */}
       {isNotificationOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex overflow-hidden">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[70vh] flex overflow-hidden mt-16">
             <div className="flex-1 flex flex-col bg-white">
-              <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
+              <div className="p-6 border-b border-gray-200 bg-white flex items-center justify-between sticky top-0 z-10">
+                <h2 className="text-xl font-semibold text-gray-900">Notifications</h2>
                 <button
                   onClick={() => setIsNotificationOpen(false)}
                   className="p-2 text-gray-400 hover:text-gray-500 rounded-full hover:bg-gray-100 transition-colors"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-6 w-6" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                <Notification onClose={() => setIsNotificationOpen(false)} />
+              <div className="flex-1 overflow-y-auto px-4">
+                <div className="grid grid-cols-2 gap-4 py-4">
+                  <Notification onClose={() => setIsNotificationOpen(false)} />
+                </div>
               </div>
             </div>
           </div>
