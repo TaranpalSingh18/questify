@@ -16,7 +16,7 @@ const Navbar: React.FC = () => {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -63,32 +63,40 @@ const Navbar: React.FC = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    fetchUnreadCount();
-    // Set up WebSocket connection for real-time notifications
-    const ws = new WebSocket('ws://localhost:5000');
-    
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      if (currentUser) {
-        const token = localStorage.getItem('token');
-        ws.send(JSON.stringify({
-          type: 'auth',
-          token
-        }));
-      }
-    };
+    if (isAuthenticated) {
+      fetchUnreadCount();
+      // Set up WebSocket connection for real-time notifications
+      const ws = new WebSocket('ws://localhost:5000');
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        if (currentUser) {
+          const token = localStorage.getItem('token');
+          ws.send(JSON.stringify({
+            type: 'auth',
+            token,
+            userId: currentUser._id
+          }));
+        }
+      };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'notification') {
-        fetchUnreadCount();
-      }
-    };
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'notification') {
+          // Update unread count
+          setUnreadCount(prev => prev + 1);
+          // Open notification panel if it contains coins
+          if (data.notification.coins) {
+            setIsNotificationOpen(true);
+          }
+        }
+      };
 
-    return () => {
-      ws.close();
-    };
-  }, [currentUser]);
+      return () => {
+        ws.close();
+      };
+    }
+  }, [currentUser, isAuthenticated]);
 
   const fetchUnreadCount = async () => {
     try {

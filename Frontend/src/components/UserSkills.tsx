@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Download, BarChart2 } from 'lucide-react';
+import { Award, Download, BarChart2, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import SkillChart from './SkillChart';
@@ -20,6 +20,7 @@ const UserSkills: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [skillData, setSkillData] = useState<{ name: string; value: number }[]>([]);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCertificates = async () => {
@@ -58,6 +59,45 @@ const UserSkills: React.FC = () => {
 
   const handleDownload = (fileUrl: string) => {
     window.open(`http://localhost:5000${fileUrl}`, '_blank');
+  };
+
+  const handleDelete = async (certificateId: string) => {
+    if (!window.confirm('Are you sure you want to delete this certificate?')) {
+      return;
+    }
+
+    setIsDeleting(certificateId);
+    try {
+      await axios.delete(`http://localhost:5000/api/users/certificates/${certificateId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      // Remove the certificate from the local state
+      setCertificates(prev => prev.filter(cert => cert._id !== certificateId));
+
+      // Update skill data
+      const updatedCertificates = certificates.filter(cert => cert._id !== certificateId);
+      const skillCounts: { [key: string]: number } = {};
+      updatedCertificates.forEach((cert: Certificate) => {
+        cert.skills.forEach(skill => {
+          skillCounts[skill] = (skillCounts[skill] || 0) + 1;
+        });
+      });
+      
+      const chartData = Object.entries(skillCounts).map(([name, value]) => ({
+        name,
+        value
+      }));
+      
+      setSkillData(chartData);
+    } catch (error) {
+      console.error('Error deleting certificate:', error);
+      alert('Failed to delete certificate. Please try again.');
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   if (loading) {
@@ -121,7 +161,7 @@ const UserSkills: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     {cert.verified && (
                       <span className="text-green-600 flex items-center">
                         <Award className="h-5 w-5 mr-1" />
@@ -134,6 +174,15 @@ const UserSkills: React.FC = () => {
                     >
                       <Download className="h-5 w-5 mr-1" />
                       Download
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cert._id)}
+                      disabled={isDeleting === cert._id}
+                      className={`text-red-600 hover:text-red-800 flex items-center ${
+                        isDeleting === cert._id ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <Trash2 className="h-5 w-5" />
                     </button>
                   </div>
                 </div>

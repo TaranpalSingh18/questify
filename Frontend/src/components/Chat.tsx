@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Send, X, User, Search, Flag, MoreVertical, Paperclip, Smile } from 'lucide-react';
 import { format } from 'date-fns';
@@ -24,9 +24,10 @@ interface ChatUser {
 
 interface ChatProps {
   onClose: () => void;
+  onUnreadCountUpdate?: (count: number) => void;
 }
 
-const Chat: React.FC<ChatProps> = ({ onClose }) => {
+const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
   const { currentUser } = useAuth();
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
@@ -36,117 +37,145 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const ws = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number>();
 
-  useEffect(() => {
-    // Initialize WebSocket connection
-    console.log('Initializing WebSocket connection...');
+  const connectWebSocket = useCallback(() => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    console.log('Connecting to WebSocket...');
     ws.current = new WebSocket('ws://localhost:5000');
 
     ws.current.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected, authenticating...');
       if (currentUser) {
-        const token = localStorage.getItem('token');
         ws.current?.send(JSON.stringify({
           type: 'auth',
-          token
+          token: localStorage.getItem('token'),
+          userId: currentUser._id
         }));
       }
     };
 
     ws.current.onmessage = (event) => {
-      console.log('Received WebSocket message:', event.data);
       const data = JSON.parse(event.data);
-      
-      if (data.type === 'message') {
-        console.log('Message details:', {
-          message: data.message,
-          selectedUser: selectedUser?._id,
-          currentUser: currentUser?.id,
-          isSender: data.message.sender === currentUser?.id,
-          isReceiver: data.message.receiver === currentUser?.id,
-          isSelectedUserSender: data.message.sender === selectedUser?._id,
-          isSelectedUserReceiver: data.message.receiver === selectedUser?._id
-        });
+      console.log('Received WebSocket message:', data);
 
-        // Only add message if it's specifically for the current chat
-        const isMessageForCurrentChat = selectedUser && 
-          ((data.message.sender.toString() === currentUser?.id && data.message.receiver.toString() === selectedUser._id) || 
-           (data.message.sender.toString() === selectedUser._id && data.message.receiver.toString() === currentUser?.id));
+      switch (data.type) {
+        case 'auth_success':
+          console.log('Successfully authenticated WebSocket');
+          break;
 
-        console.log('Should display message:', isMessageForCurrentChat);
+        case 'message':
+          console.log('Received new message:', data.message);
+          if (data.message) {
+            handleNewMessage(data.message);
+          }
+          break;
 
-        if (isMessageForCurrentChat) {
-          setMessages(prev => {
-            // Check if message already exists to prevent duplicates
-            const messageExists = prev.some(msg => msg._id === data.message._id);
-            if (messageExists) {
-              console.log('Message already exists in state, not adding duplicate');
-              return prev;
-            }
-            console.log('Adding new message to state');
-            return [...prev, data.message];
-          });
-          scrollToBottom();
-        }
+        case 'message_sent':
+          console.log('Message sent confirmation received:', data.messageId);
+          break;
 
-        // Update last message in users list if this message is for the current user
-        if (data.message.receiver.toString() === currentUser?.id || data.message.sender.toString() === currentUser?.id) {
-          setUsers(prev => prev.map(user => {
-            const isMessageForThisUser = 
-              (data.message.sender.toString() === user._id && data.message.receiver.toString() === currentUser?.id) ||
-              (data.message.sender.toString() === currentUser?.id && data.message.receiver.toString() === user._id);
-            
-            if (isMessageForThisUser) {
-              return {
-                ...user,
-                lastMessage: data.message
-              };
-            }
-            return user;
-          }));
-        }
-      } else if (data.type === 'chat_session') {
-        // Handle chat session updates
-        console.log('Chat session update:', data);
-        if (data.sessionId) {
-          // Update the current chat session if needed
-          console.log('Chat session established:', data.sessionId);
-        }
+        case 'chat_joined':
+          console.log('Successfully joined chat with:', data.partnerId);
+          break;
+
+        case 'pong':
+          // Received pong from server, connection is alive
+          break;
+
+        default:
+          console.log('Unknown message type:', data.type);
       }
+    };
+
+    ws.current.onclose = (event) => {
+      console.log('WebSocket disconnected:', event);
+      // Attempt to reconnect after 3 seconds
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        console.log('Attempting to reconnect...');
+        connectWebSocket();
+      }, 3000);
     };
 
     ws.current.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
+  }, [currentUser]);
 
-    ws.current.onclose = () => {
-      console.log('WebSocket connection closed');
-    };
+  const handleNewMessage = useCallback((newMsg: Message) => {
+    console.log('Handling new message:', newMsg);
+    
+    // Only process messages for the current chat
+    const isRelevantMessage = selectedUser && (
+      (newMsg.sender === currentUser?._id && newMsg.receiver === selectedUser._id) ||
+      (newMsg.sender === selectedUser._id && newMsg.receiver === currentUser?._id)
+    );
+
+    if (isRelevantMessage) {
+      setMessages(prevMessages => {
+        if (prevMessages.some(msg => msg._id === newMsg._id)) {
+          return prevMessages;
+        }
+        return [...prevMessages, newMsg];
+      });
+    }
+
+    // Update users list with last message
+    setUsers(prevUsers => prevUsers.map(user => {
+      if (user._id === newMsg.sender || user._id === newMsg.receiver) {
+        const isUnread = user._id === currentUser?._id && newMsg.sender !== currentUser?._id;
+        return {
+          ...user,
+          lastMessage: newMsg,
+          unreadCount: isUnread ? (user.unreadCount || 0) + 1 : user.unreadCount || 0
+        };
+      }
+      return user;
+    }));
+
+    scrollToBottom();
+  }, [currentUser?._id, selectedUser]);
+
+  useEffect(() => {
+    connectWebSocket();
 
     return () => {
-      console.log('Cleaning up WebSocket connection');
-      ws.current?.close();
+      if (ws.current) {
+        ws.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
     };
-  }, [currentUser, selectedUser]);
+  }, [connectWebSocket]);
+
+  // Keep WebSocket connection alive with ping/pong
+  useEffect(() => {
+    const pingInterval = setInterval(() => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 30000); // Send ping every 30 seconds
+
+    return () => clearInterval(pingInterval);
+  }, []);
+
+  useEffect(() => {
+    if (selectedUser && ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({
+        type: 'join_chat',
+        partnerId: selectedUser._id
+      }));
+      fetchMessages(selectedUser._id);
+    }
+  }, [selectedUser]);
 
   useEffect(() => {
     fetchUsers();
   }, []);
-
-  useEffect(() => {
-    if (selectedUser && ws.current && ws.current.readyState === WebSocket.OPEN) {
-      // Start chat session first
-      const startChatMessage = {
-        type: 'start_chat',
-        partnerId: selectedUser._id
-      };
-      console.log('Starting chat session:', startChatMessage);
-      ws.current.send(JSON.stringify(startChatMessage));
-
-      // Then fetch messages
-      fetchMessages(selectedUser._id);
-    }
-  }, [selectedUser, ws.current?.readyState]);
 
   useEffect(() => {
     scrollToBottom();
@@ -200,7 +229,7 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
 
       // Filter out the current user and format the data
       const filteredUsers: ChatUser[] = response.data
-        .filter(user => user._id !== currentUser.id)
+        .filter(user => user._id !== currentUser._id)
         .map(user => ({
           _id: user._id,
           name: user.name,
@@ -284,24 +313,19 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedUser || !ws.current) {
-      console.log('Cannot send message:', { 
-        messageEmpty: !newMessage.trim(), 
-        noSelectedUser: !selectedUser, 
-        noWebSocket: !ws.current 
-      });
+      console.log('Cannot send message - missing required data');
       return;
     }
 
     try {
-      // Create message object
+      console.log('Sending message to:', selectedUser._id);
+      
       const messageData = {
-        sender: currentUser?.id,
+        sender: currentUser?._id,
         receiver: selectedUser._id,
-        content: newMessage,
+        content: newMessage.trim(),
         timestamp: new Date().toISOString()
       };
-
-      console.log('Saving message to database:', messageData);
 
       // First save message to database
       const response = await fetch('http://localhost:5000/api/messages', {
@@ -318,29 +342,24 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
       }
 
       const savedMessage = await response.json();
-      console.log('Message saved to database:', savedMessage);
+      console.log('Message saved successfully:', savedMessage);
 
       // Send message through WebSocket
-      ws.current.send(JSON.stringify({
-        type: 'message',
-        message: savedMessage
-      }));
+      if (ws.current?.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          type: 'message',
+          message: savedMessage
+        }));
+      } else {
+        console.error('WebSocket is not connected');
+        throw new Error('WebSocket connection lost');
+      }
 
-      // Update messages state with the saved message
-      setMessages(prev => [...prev, savedMessage]);
-
-      // Update last message in users list
-      setUsers(prev => prev.map(user => 
-        user._id === selectedUser._id ? {
-          ...user,
-          lastMessage: savedMessage
-        } : user
-      ));
-
+      // Update local state
+      handleNewMessage(savedMessage);
+      
       // Clear input
       setNewMessage('');
-
-      console.log('Message sent and added to local state:', savedMessage);
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message. Please try again.');
@@ -510,19 +529,19 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
                         )}
                         <div
                           className={`flex ${
-                            message.sender === currentUser?.id ? 'justify-end' : 'justify-start'
+                            message.sender === currentUser?._id ? 'justify-end' : 'justify-start'
                           }`}
                         >
                           <div
                             className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                              message.sender === currentUser?.id
+                              message.sender === currentUser?._id
                                 ? 'bg-blue-600 text-white'
                                 : 'bg-white text-gray-900 shadow-sm'
                             }`}
                           >
                             <p className="text-sm">{message.content}</p>
                             <p className={`text-xs mt-1 ${
-                              message.sender === currentUser?.id ? 'text-blue-100' : 'text-gray-500'
+                              message.sender === currentUser?._id ? 'text-blue-100' : 'text-gray-500'
                             }`}>
                               {format(new Date(message.timestamp), 'h:mm a')}
                             </p>

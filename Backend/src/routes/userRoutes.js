@@ -27,6 +27,7 @@ router.post('/profile-picture', auth, uploadProfilePicture.single('profilePictur
 // Certificate routes
 router.post('/certificates', auth, uploadCertificate.single('certificate'), userController.uploadCertificate);
 router.get('/certificates', auth, userController.getUserCertificates);
+router.delete('/certificates/:id', auth, userController.deleteCertificate);
 
 // Leaderboard route - public access
 router.get('/leaderboard', userController.getLeaderboard);

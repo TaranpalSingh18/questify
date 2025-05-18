@@ -1,11 +1,15 @@
 const express = require("express");
 const Quest = require("../models/Quest");
+const User = require("../models/User");
+const Notification = require("../models/Notification");
 const WebSocket = require('ws');
 const { getWebSocketServer } = require("../websocket/questWebSocket");
 const auth = require('../middleware/auth');
 const { notifyQuestUpdate } = require('../utils/questWebSocket');
 
 const router = express.Router();
+const POINTS_FOR_QUEST_CREATION = 10;
+
 console.log("questRoutes.js is loaded"); 
 
 
@@ -52,10 +56,35 @@ router.post("/", auth, async (req, res) => {
     const savedQuest = await quest.save();
     console.log('Quest saved successfully:', savedQuest);
 
-    // Notify all connected clients about the new quest
-    notifyQuestUpdate('create', savedQuest);
+    // Update hirer's coins
+    const hirer = await User.findById(req.user.id);
+    if (!hirer) {
+      throw new Error('User not found');
+    }
 
-    res.status(201).json(savedQuest);
+    hirer.coins += POINTS_FOR_QUEST_CREATION;
+    await hirer.save();
+
+    // Create notification for the hirer about coins earned
+    const notification = new Notification({
+      user: hirer._id,
+      type: 'quest',
+      message: `You earned ${POINTS_FOR_QUEST_CREATION} coins for posting a new quest "${title}"!`,
+      coins: POINTS_FOR_QUEST_CREATION,
+      read: false
+    });
+
+    await notification.save();
+
+    // Send real-time notification
+    notifyQuestUpdate('create', savedQuest);
+    notifyQuestUpdate('notification', notification);
+
+    res.status(201).json({
+      quest: savedQuest,
+      coinsEarned: POINTS_FOR_QUEST_CREATION,
+      newCoinBalance: hirer.coins
+    });
   } catch (error) {
     console.error('Error creating quest:', error);
     res.status(500).json({ message: error.message });

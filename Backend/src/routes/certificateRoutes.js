@@ -9,6 +9,9 @@ const Certificate = require('../models/Certificate');
 const Notification = require('../models/Notification');
 const { getWebSocketServer } = require('../utils/chatWebSocket');
 const WebSocket = require('ws');
+const { sendNotification } = require('../websocket/questWebSocket');
+
+const POINTS_FOR_CERTIFICATE = 10;
 
 // Configure multer for file upload
 const storage = multer.diskStorage({
@@ -75,25 +78,28 @@ router.post('/upload', auth, upload.single('certificate'), async (req, res) => {
 
     // Update user's coins
     const user = await User.findById(userId);
-    user.coins += 20; // Certificate upload bonus
+    user.coins += POINTS_FOR_CERTIFICATE;
     await user.save();
 
-    // Create notification
+    // Create notification about coins earned
     const notification = new Notification({
-      user: userId,
+      user: user._id,
       type: 'certificate',
-      message: `You earned 20 coins for uploading your ${title} certificate!`,
-      coins: 20
+      message: `You earned ${POINTS_FOR_CERTIFICATE} coins for uploading your "${title}" certificate!`,
+      coins: POINTS_FOR_CERTIFICATE,
+      read: false
     });
+
     await notification.save();
 
     // Send real-time notification
-    sendNotification(userId, notification);
+    sendNotification(userId, notification.toObject());
 
     res.json({
       message: 'Certificate uploaded successfully',
       certificate,
-      coinsEarned: 20
+      coinsEarned: POINTS_FOR_CERTIFICATE,
+      newCoinBalance: user.coins
     });
   } catch (error) {
     console.error('Certificate upload error:', error);

@@ -8,6 +8,8 @@ const { sendNotification } = require('../websocket/questWebSocket');
 
 const router = express.Router();
 
+const POINTS_FOR_SUBMISSION = 10;
+
 // console.log("Loading submission routes...");
 
 // Submit a Solution
@@ -33,25 +35,40 @@ router.post("/", auth, async (req, res) => {
       throw new Error('Quest not found');
     }
 
-    // Get the seeker's profile name
+    // Get the seeker's profile and update coins
     const seeker = await User.findById(req.user.id);
     if (!seeker) {
       throw new Error('User not found');
     }
 
-    // Create notification for the hirer
-    const notification = new Notification({
+    // Update seeker's coins
+    seeker.coins += POINTS_FOR_SUBMISSION;
+    await seeker.save();
+
+    // Create notification for the hirer about submission
+    const hirerNotification = new Notification({
       user: quest.postedBy,
       type: 'quest',
       message: `${seeker.name} has submitted a solution for your quest "${quest.title}". Check their video demo and GitHub link for details.`,
       read: false
     });
 
-    await notification.save();
+    await hirerNotification.save();
 
-    // Send real-time notification
+    // Create notification for the seeker about coins earned
+    const seekerNotification = new Notification({
+      user: seeker._id,
+      type: 'quest',
+      message: `You earned ${POINTS_FOR_SUBMISSION} coins for submitting a solution to "${quest.title}"!`,
+      coins: POINTS_FOR_SUBMISSION,
+      read: false
+    });
+
+    await seekerNotification.save();
+
+    // Send real-time notifications
     sendNotification(quest.postedBy, {
-      ...notification.toObject(),
+      ...hirerNotification.toObject(),
       submission: {
         videoDemo,
         githubLink,
@@ -60,7 +77,13 @@ router.post("/", auth, async (req, res) => {
       }
     });
 
-    res.status(201).json(savedSubmission);
+    sendNotification(seeker._id, seekerNotification.toObject());
+
+    res.status(201).json({
+      submission: savedSubmission,
+      coinsEarned: POINTS_FOR_SUBMISSION,
+      newCoinBalance: seeker.coins
+    });
   } catch (error) {
     console.error('Error in submission route:', error);
     res.status(500).json({ error: error.message });

@@ -1,111 +1,116 @@
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from "react-router-dom";
 
-
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  coins: number;
+  profilePicture?: string;
+}
 
 interface AuthContextType {
-  currentUser: any;
+  currentUser: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (name: string, email: string, password: string, role: string) => Promise<boolean>;
-  logout: () => void;
-  updateUserProfile: (userData: any) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  updateUserCoins: (newBalance: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const navigate = useNavigate();
   
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    const token = localStorage.getItem("token");
-
-    if (storedUser && token) {
-      setCurrentUser(JSON.parse(storedUser));
-      setIsAuthenticated(true);
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchUserProfile();
     }
+
+    // Set up WebSocket connection for real-time updates
+    const ws = new WebSocket('ws://localhost:5000');
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'notification' && data.notification?.coins) {
+        // Update user coins when a notification with coins is received
+        setCurrentUser(prev => prev ? {
+          ...prev,
+          coins: data.notification.newCoinBalance || prev.coins + data.notification.coins
+        } : prev);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
   }, []);
 
-  const updateUserProfile = async (userData: any) => {
+  const fetchUserProfile = async () => {
     try {
-      const response = await axios.put(
-        "http://localhost:5000/api/users/profile",
-        userData,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
+      const response = await fetch('http://localhost:5000/api/users/profile', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
-      );
-      
-      const updatedUser = response.data;
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      setCurrentUser(updatedUser);
-      return updatedUser;
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentUser(data);
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem('token');
+        setIsAuthenticated(false);
+      }
     } catch (error) {
-      console.error("Profile update error:", error);
+      console.error('Error fetching user profile:', error);
+      localStorage.removeItem('token');
+      setIsAuthenticated(false);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('token', data.token);
+      await fetchUserProfile();
+    } catch (error) {
+      console.error('Login error:', error);
       throw error;
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const response = await axios.post("http://localhost:5000/api/auth/login", { email, password });
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.user)); 
-
-      setCurrentUser(response.data.user);
-      setIsAuthenticated(true);
-      
-      if (response.data.user.role === "hirer") {
-        navigate("/hirer-dashboard");
-      } else {
-        navigate("/");
-      }
-      
-      return true;
-    } catch (error) {
-      console.error("Login error:", (error as any).response ? (error as any).response.data : error);
-      return false;
-    }
-  };
-
-  const signup = async (name: string, email: string, password: string, role: string): Promise<boolean> => {
-    try {
-      console.log("🔍 Sending to backend:", { name, email, password, role }); // Debug log
-      const response = await axios.post("http://localhost:5000/api/auth/signup", { name, email, password, role });
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
-      setCurrentUser(response.data.user);
-      setIsAuthenticated(true);
-      return true;
-    } catch (error) {
-      console.error("Signup error:", (error as any).response ? (error as any).response.data : error);
-      return false;
-    }
-  };
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+  const logout = async () => {
+    localStorage.removeItem('token');
     setCurrentUser(null);
     setIsAuthenticated(false);
-    navigate("/login");
+  };
+
+  const updateUserCoins = (newBalance: number) => {
+    setCurrentUser(prev => prev ? {
+      ...prev,
+      coins: newBalance
+    } : prev);
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      currentUser, 
-      isAuthenticated, 
-      login, 
-      signup, 
-      logout,
-      updateUserProfile 
-    }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticated, login, logout, updateUserCoins }}>
       {children}
     </AuthContext.Provider>
   );

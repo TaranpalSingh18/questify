@@ -149,4 +149,38 @@ exports.uploadCertificate = async (req, res) => {
     console.error('Error uploading certificate:', error);
     res.status(500).json({ message: 'Error uploading certificate' });
   }
+};
+
+// Delete certificate
+exports.deleteCertificate = async (req, res) => {
+  try {
+    const certificate = await Certificate.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    });
+
+    if (!certificate) {
+      return res.status(404).json({ message: 'Certificate not found' });
+    }
+
+    // Delete the file from the server
+    if (certificate.fileUrl) {
+      try {
+        const filePath = path.join(__dirname, '../../../', certificate.fileUrl);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      } catch (deleteError) {
+        console.error('Error deleting certificate file:', deleteError);
+      }
+    }
+
+    // Delete the certificate from the database
+    await certificate.remove();
+
+    res.json({ message: 'Certificate deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting certificate:', error);
+    res.status(500).json({ message: 'Error deleting certificate' });
+  }
 }; 
