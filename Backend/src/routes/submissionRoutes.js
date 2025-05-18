@@ -8,7 +8,7 @@ const { sendNotification } = require('../websocket/questWebSocket');
 
 const router = express.Router();
 
-console.log("Loading submission routes...");
+// console.log("Loading submission routes...");
 
 // Submit a Solution
 router.post("/", auth, async (req, res) => {
