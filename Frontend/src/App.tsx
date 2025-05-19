@@ -9,6 +9,7 @@ import QuestDetailPage from './pages/QuestDetailPage';
 import CreateQuestPage from './pages/CreateQuestPage';
 import ProfilePage from './pages/ProfilePage';
 import Dashboard from './pages/Dashboard';
+import NotificationsPage from './pages/NotificationsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/quest/:id" element={<QuestDetailPage />} />
             <Route path="/create-quest" element={<CreateQuestPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           </Routes>
         </QuestProvider>

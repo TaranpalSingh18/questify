@@ -16,6 +16,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  signup: (name: string, email: string, password: string, role: string) => Promise<boolean>;
   updateUserCoins: (newBalance: number) => void;
 }
 
@@ -73,6 +74,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signup = async (name: string, email: string, password: string, role: string): Promise<boolean> => {
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name, email, password, role })
+      });
+
+      if (!response.ok) {
+        throw new Error('Signup failed');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('token', data.token);
+      await fetchUserProfile();
+      return true;
+    } catch (error) {
+      console.error('Signup error:', error);
+      return false;
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       const response = await fetch('http://localhost:5000/api/auth/login', {
@@ -110,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isAuthenticated, login, logout, updateUserCoins }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticated, login, logout, signup, updateUserCoins }}>
       {children}
     </AuthContext.Provider>
   );

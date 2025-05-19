@@ -1,7 +1,7 @@
 // src/components/Navbar.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown, LogOut, Menu, X } from 'lucide-react';
+import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown, LogOut, Menu, X, PlusCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CiCoins1 } from "react-icons/ci";
 import Leaderboard from './Leaderboard';
@@ -139,93 +139,37 @@ const Navbar: React.FC = () => {
             </div>
 
             {isAuthenticated ? (
-              <div className="flex items-center">
-                <div className="flex items-center">
-                  <button
-                    onClick={() => setShowLeaderboard(true)}
-                    className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none"
+              <div className="flex items-center space-x-4">
+                {currentUser?.role === 'hirer' && (
+                  <Link
+                    to="/create-quest"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    <Trophy className="h-6 w-6" />
-                  </button>
-                  <div className="flex items-center bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200 ml-2">
-                    <CiCoins1 className='h-6 w-6 text-yellow-500'/>
-                    <span className="text-sm font-medium text-yellow-700 ml-1">{currentUser?.coins || 0}</span>
-                  </div>
-
-                  {/* Premium Upgrade Button */}
-                  <button
-                    onClick={() => setShowSubscriptionModal(true)}
-                    className="ml-4 flex items-center px-3 py-1 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600 text-white hover:from-yellow-500 hover:to-yellow-700 transition-all"
-                  >
-                    <Crown className="h-4 w-4 mr-1" />
-                    <span className="text-sm font-medium">Upgrade</span>
-                  </button>
-             
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setIsNotificationOpen(true);
-                    }}
-                    className="ml-4 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none relative"
-                  >
-                    <Bell className="h-6 w-6" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-                  <button 
-                    onClick={() => setShowChat(true)}
-                    className="ml-2 p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none relative"
-                  >
-                    <MessageSquare className="h-6 w-6" />
-                    {unreadMessages > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                        {unreadMessages}
-                      </span>
-                    )}
-                  </button>
-                  
-                  <div className="ml-3 relative">
-                    <div className="group relative">
-                      <button className="flex items-center max-w-xs rounded-full text-sm focus:outline-none">
-                        {currentUser?.profilePicture ? (
-                          <img
-                            className="h-8 w-8 rounded-full"
-                            src={currentUser.profilePicture}
-                            alt={currentUser.name}
-                          />
-                        ) : (
-                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                            <User className="h-5 w-5 text-blue-600" />
-                          </div>
-                        )}
-                      </button>
-                      
-                      <div className="hidden group-hover:block absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5">
-                        <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          Your Profile
-                        </Link>
-                        {currentUser?.role === 'hirer' && (
-                          <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            Dashboard
-                          </Link>
-                        )}
-                        <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                          Settings
-                        </Link>
-                        <button
-                          onClick={handleLogout}
-                          className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          Sign out
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                    <PlusCircle className="h-5 w-5 mr-2" />
+                    Create Quest
+                  </Link>
+                )}
+                <Link
+                  to="/notifications"
+                  className="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                >
+                  <Bell className="h-6 w-6" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white" />
+                  )}
+                </Link>
+                <Link
+                  to="/profile"
+                  className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                >
+                  <User className="h-6 w-6" />
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                >
+                  <LogOut className="h-6 w-6" />
+                </button>
               </div>
             ) : (
               <div className="flex items-center">

@@ -56,11 +56,15 @@ const setupWebSocket = (server) => {
 
 const handleAuth = (ws, data) => {
   try {
-    const { token, userId } = data;
-    if (!token || !userId) {
-      console.error('Missing token or userId in auth message');
+    const { token } = data;
+    if (!token) {
+      console.error('Missing token in auth message');
       return;
     }
+
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
 
     // Store the authenticated client
     clients.set(userId, ws);
@@ -74,6 +78,10 @@ const handleAuth = (ws, data) => {
     }));
   } catch (error) {
     console.error('Error in handleAuth:', error);
+    ws.send(JSON.stringify({
+      type: 'auth_error',
+      message: 'Authentication failed'
+    }));
   }
 };
 
@@ -112,18 +120,20 @@ const handleMessage = (ws, data) => {
 
 const handleJoinChat = (ws, data) => {
   try {
-    const { partnerId } = data;
-    if (!partnerId || !ws.userId) {
-      console.error('Invalid join_chat data:', data);
+    const { chatId } = data;
+    if (!chatId) {
+      console.error('Missing chatId in join_chat message');
       return;
     }
 
-    console.log(`User ${ws.userId} joined chat with ${partnerId}`);
-    
-    // Send confirmation to the client
+    // Store the chat room for this client
+    ws.chatId = chatId;
+    console.log(`Client joined chat: ${chatId}`);
+
+    // Send confirmation back to client
     ws.send(JSON.stringify({
-      type: 'chat_joined',
-      partnerId: partnerId
+      type: 'join_success',
+      chatId: chatId
     }));
   } catch (error) {
     console.error('Error in handleJoinChat:', error);
@@ -141,9 +151,14 @@ const handlePing = (ws) => {
 const notifyQuestUpdate = (type, data) => {
   if (!wss) return;
 
+  const message = JSON.stringify({
+    type: type.toUpperCase(),
+    quest: data
+  });
+
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ type, data }));
+      client.send(message);
     }
   });
 };
@@ -154,7 +169,7 @@ const sendNotification = (userId, notification) => {
   const client = clients.get(userId);
   if (client && client.readyState === WebSocket.OPEN) {
     client.send(JSON.stringify({
-      type: 'notification',
+      type: 'NOTIFICATION',
       notification: {
         ...notification,
         timestamp: new Date().toISOString()

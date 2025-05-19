@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Briefcase, Search, Filter, TrendingUp } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Briefcase, Search, Filter, TrendingUp, Building, Calendar, MapPin, DollarSign, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useQuests } from '../context/QuestContext';
 import QuestCard from '../components/QuestCard';
@@ -11,9 +11,17 @@ import SubscriptionPlans from '../components/SubscriptionPlans';
 const HomePage: React.FC = () => {
   const { isAuthenticated, currentUser } = useAuth();
   const { quests, loading, error } = useQuests();
+  const navigate = useNavigate();
   const [filteredQuests, setFilteredQuests] = useState(quests);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedQuest, setSelectedQuest] = useState<string | null>(null);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [submissionData, setSubmissionData] = useState({
+    videoDemo: '',
+    githubLink: '',
+    description: ''
+  });
 
   useEffect(() => {
     let results = quests;
@@ -48,6 +56,42 @@ const HomePage: React.FC = () => {
 
   // Get all unique skills from quests
   const allSkills = Array.from(new Set(quests.flatMap(quest => quest.skills))).sort();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedQuest) return;
+
+    try {
+      const response = await fetch('http://localhost:5000/api/submissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          questId: selectedQuest,
+          ...submissionData
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit solution');
+      }
+
+      setShowSubmissionModal(false);
+      setSelectedQuest(null);
+      setSubmissionData({
+        videoDemo: '',
+        githubLink: '',
+        description: ''
+      });
+      
+      // Show success message or redirect
+      navigate('/profile');
+    } catch (error) {
+      console.error('Error submitting solution:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -223,6 +267,74 @@ const HomePage: React.FC = () => {
           </div>
         )}
       </main>
+      
+      {/* Submission Modal */}
+      {showSubmissionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <h2 className="text-2xl font-bold mb-4">Submit Your Solution</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Video Demo URL
+                </label>
+                <input
+                  type="url"
+                  value={submissionData.videoDemo}
+                  onChange={(e) => setSubmissionData(prev => ({ ...prev, videoDemo: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="https://youtube.com/..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  GitHub Repository URL
+                </label>
+                <input
+                  type="url"
+                  value={submissionData.githubLink}
+                  onChange={(e) => setSubmissionData(prev => ({ ...prev, githubLink: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="https://github.com/..."
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={submissionData.description}
+                  onChange={(e) => setSubmissionData(prev => ({ ...prev, description: e.target.value }))}
+                  required
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Describe your solution and implementation details..."
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowSubmissionModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  Submit Solution
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       
       <footer className="bg-white border-t border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

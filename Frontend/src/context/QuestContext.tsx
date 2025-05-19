@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Quest, Submission } from '../types';
-import { mockQuests } from '../data/mockData';
+import { useAuth } from './AuthContext';
 
 interface QuestContextType {
   quests: Quest[];
@@ -8,8 +8,8 @@ interface QuestContextType {
   getQuestById: (id: string) => Quest | undefined;
   getSubmissionsByQuestId: (questId: string) => Submission[];
   getSubmissionsByUserId: (userId: string) => Submission[];
-  createQuest: (quest: Omit<Quest, '_id' | 'postedAt' | 'applicants'>) => void;
-  submitToQuest: (submission: Omit<Submission, 'id' | 'submittedAt' | 'status'>) => void;
+  createQuest: (quest: Omit<Quest, '_id' | 'postedAt' | 'applicants'>) => Promise<void>;
+  submitToQuest: (submission: Omit<Submission, 'id' | 'submittedAt' | 'status'>) => Promise<void>;
   loading: boolean;
   error: string | null;
   refreshQuests: () => Promise<void>;
@@ -22,10 +22,15 @@ export const QuestProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { currentUser } = useAuth();
 
   const fetchQuests = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/quests');
+      const response = await fetch('http://localhost:5000/api/quests', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch quests');
       }
@@ -48,22 +53,36 @@ export const QuestProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     fetchQuests();
 
     // Set up WebSocket connection for real-time updates
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     const ws = new WebSocket('ws://localhost:5000');
+
+    ws.onopen = () => {
+      // Send authentication message
+      ws.send(JSON.stringify({
+        type: 'auth',
+        token: token
+      }));
+    };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
       switch (data.type) {
-        case 'NEW_QUEST':
+        case 'CREATE':
           setQuests(prev => [...prev, data.quest]);
           break;
-        case 'QUEST_UPDATED':
+        case 'UPDATE':
           setQuests(prev => prev.map(quest => 
             quest._id === data.quest._id ? data.quest : quest
           ));
           break;
-        case 'QUEST_DELETED':
-          setQuests(prev => prev.filter(quest => quest._id !== data.questId));
+        case 'DELETE':
+          setQuests(prev => prev.filter(quest => quest._id !== data.quest._id));
+          break;
+        case 'NOTIFICATION':
+          // Handle notifications if needed
           break;
       }
     };
@@ -89,31 +108,57 @@ export const QuestProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return submissions.filter(submission => submission.userId === userId);
   };
 
-  const createQuest = (quest: Omit<Quest, '_id' | 'postedAt' | 'applicants'>) => {
-    const newQuest: Quest = {
-      ...quest,
-      _id: `${quests.length + 1}`,
-      postedAt: new Date().toISOString(),
-      applicants: 0
-    };
-    setQuests([...quests, newQuest]);
+  const createQuest = async (quest: Omit<Quest, '_id' | 'postedAt' | 'applicants'>) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/quests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(quest)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create quest');
+      }
+
+      const newQuest = await response.json();
+      setQuests(prev => [...prev, newQuest.quest]);
+    } catch (error) {
+      console.error('Error creating quest:', error);
+      throw error;
+    }
   };
 
-  const submitToQuest = (submission: Omit<Submission, 'id' | 'submittedAt' | 'status'>) => {
-    const newSubmission: Submission = {
-      ...submission,
-      id: `${submissions.length + 1}`,
-      submittedAt: new Date().toISOString(),
-      status: 'pending'
-    };
-    setSubmissions([...submissions, newSubmission]);
-    
-    // Update quest applicants count
-    setQuests(quests.map(quest => 
-      quest.id === submission.questId 
-        ? { ...quest, applicants: (quest.applicants || 0) + 1 } 
-        : quest
-    ));
+  const submitToQuest = async (submission: Omit<Submission, 'id' | 'submittedAt' | 'status'>) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/submissions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(submission)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit solution');
+      }
+
+      const newSubmission = await response.json();
+      setSubmissions(prev => [...prev, newSubmission.submission]);
+      
+      // Update quest applicants count
+      setQuests(quests.map(quest => 
+        quest._id === submission.questId 
+          ? { ...quest, applicants: (quest.applicants || 0) + 1 } 
+          : quest
+      ));
+    } catch (error) {
+      console.error('Error submitting solution:', error);
+      throw error;
+    }
   };
 
   return (

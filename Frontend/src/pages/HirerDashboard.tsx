@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { PlusCircle, FileText, Users } from "lucide-react";
+import { PlusCircle, FileText, Users, Check, X } from "lucide-react";
 import { useQuests } from '../context/QuestContext';
 import { QuestFormData } from '../types/quest';
 
@@ -156,6 +156,30 @@ const HirerDashboard: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to create quest');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmissionAction = async (submissionId: string, action: 'approve' | 'reject') => {
+    try {
+      const response = await axios.put(
+        `http://localhost:5000/api/submissions/${submissionId}`,
+        { status: action === 'approve' ? 'approved' : 'rejected' },
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        }
+      );
+
+      if (response.status === 200) {
+        // Update local state
+        setSubmissions(submissions.map(sub => 
+          sub._id === submissionId 
+            ? { ...sub, status: action === 'approve' ? 'approved' : 'rejected' }
+            : sub
+        ));
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing submission:`, error);
+      setError(`Failed to ${action} submission`);
     }
   };
 
@@ -338,8 +362,8 @@ const HirerDashboard: React.FC = () => {
                   <span className="font-medium">{submissions.length}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Completed Quests</span>
-                  <span className="font-medium">0</span>
+                  <span className="text-sm text-gray-500">Pending Reviews</span>
+                  <span className="font-medium">{submissions.filter(s => s.status === 'pending').length}</span>
                 </div>
               </div>
             </div>
@@ -446,13 +470,27 @@ const HirerDashboard: React.FC = () => {
                 <div className="space-y-4">
                   {submissions.map((submission) => (
                     <div key={submission._id} className="p-4 border border-gray-200 rounded-md">
-                      <div className="flex justify-between mb-2">
-                        <h4 className="font-bold text-lg">{submission.questTitle}</h4>
-                        <span className="text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded-md">
-                          Submitted by: {submission.submitterName}
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-bold text-lg">{submission.questTitle}</h4>
+                          <p className="text-sm text-gray-500">Submitted by: {submission.submitterName}</p>
+                          <p className="text-sm text-gray-500">
+                            Submitted on: {new Date(submission.submittedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-sm ${
+                          submission.status === 'approved' 
+                            ? 'bg-green-100 text-green-800'
+                            : submission.status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
                         </span>
                       </div>
+                      
                       <p className="mt-2 text-gray-600">{submission.description}</p>
+                      
                       <div className="mt-4 space-y-2">
                         <a
                           href={submission.videoDemo}
@@ -474,14 +512,25 @@ const HirerDashboard: React.FC = () => {
                           View GitHub Repository
                         </a>
                       </div>
-                      <div className="mt-4 flex justify-end space-x-2">
-                        <button className="px-3 py-1 text-sm border border-green-500 text-green-600 rounded-md hover:bg-green-50">
-                          Accept
-                        </button>
-                        <button className="px-3 py-1 text-sm border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50">
-                          Request Changes
-                        </button>
-                      </div>
+
+                      {submission.status === 'pending' && (
+                        <div className="mt-4 flex justify-end space-x-2">
+                          <button
+                            onClick={() => handleSubmissionAction(submission._id, 'approve')}
+                            className="inline-flex items-center px-3 py-1 text-sm border border-green-500 text-green-600 rounded-md hover:bg-green-50"
+                          >
+                            <Check className="h-4 w-4 mr-1" />
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleSubmissionAction(submission._id, 'reject')}
+                            className="inline-flex items-center px-3 py-1 text-sm border border-red-500 text-red-600 rounded-md hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4 mr-1" />
+                            Reject
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
