@@ -8,6 +8,7 @@ import Leaderboard from './Leaderboard';
 import SubscriptionPlans from './SubscriptionPlans';
 import Chat from './Chat';
 import Notification from './Notification';
+import WalletConnectButton from './WalletConnectButton';
 
 const Navbar: React.FC = () => {
   const { currentUser, isAuthenticated, logout } = useAuth();

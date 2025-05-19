@@ -18,7 +18,11 @@ interface Submission {
   _id: string;
   questTitle: string;
   submitterName: string;
-  response: string;
+  videoDemo: string;
+  githubLink: string;
+  description: string;
+  submittedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 const HirerDashboard: React.FC = () => {
@@ -448,7 +452,28 @@ const HirerDashboard: React.FC = () => {
                           Submitted by: {submission.submitterName}
                         </span>
                       </div>
-                      <p className="mt-2 text-gray-600">{submission.response}</p>
+                      <p className="mt-2 text-gray-600">{submission.description}</p>
+                      <div className="mt-4 space-y-2">
+                        <a
+                          href={submission.videoDemo}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-blue-600 hover:text-blue-700"
+                        >
+                          <span className="mr-2">📹</span>
+                          Watch Video Demo
+                        </a>
+                        <br />
+                        <a
+                          href={submission.githubLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center text-blue-600 hover:text-blue-700"
+                        >
+                          <span className="mr-2">📦</span>
+                          View GitHub Repository
+                        </a>
+                      </div>
                       <div className="mt-4 flex justify-end space-x-2">
                         <button className="px-3 py-1 text-sm border border-green-500 text-green-600 rounded-md hover:bg-green-50">
                           Accept

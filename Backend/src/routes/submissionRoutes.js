@@ -91,11 +91,32 @@ router.post("/", auth, async (req, res) => {
 });
 
 // Get All Submissions
-router.get("/", async (req, res) => {
+router.get("/", auth, async (req, res) => {
   try {
-    const submissions = await Submission.find().populate("questId userId");
-    res.json(submissions);
+    // First get all quests posted by the current user
+    const userQuests = await Quest.find({ postedBy: req.user.id });
+    const questIds = userQuests.map(quest => quest._id);
+
+    // Then get all submissions for those quests
+    const submissions = await Submission.find({ questId: { $in: questIds } })
+      .populate("questId", "title")
+      .populate("userId", "name");
+
+    // Transform the data to include quest title and submitter name
+    const transformedSubmissions = submissions.map(submission => ({
+      _id: submission._id,
+      questTitle: submission.questId.title,
+      submitterName: submission.userId.name,
+      videoDemo: submission.videoDemo,
+      githubLink: submission.githubLink,
+      description: submission.description,
+      submittedAt: submission.submittedAt,
+      status: submission.status
+    }));
+
+    res.json(transformedSubmissions);
   } catch (error) {
+    console.error('Error fetching submissions:', error);
     res.status(500).json({ error: error.message });
   }
 });

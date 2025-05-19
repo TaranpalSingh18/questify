@@ -59,7 +59,7 @@ const LoginPage: React.FC = () => {
   
   const handleDemoLogin = async (demoEmail: string) => {
     setEmail(demoEmail);
-    setPassword('password123'); // In a real app, this would be a secure password
+    setPassword('password'); // In a real app, this would be a secure password
     
     try {
       setIsLoading(true);
