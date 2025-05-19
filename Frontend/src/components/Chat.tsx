@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Send, X, User, Search, Flag, MoreVertical, Paperclip, Smile } from 'lucide-react';
+import { Send, X, User, Search, Flag, MoreVertical, Paperclip, Smile, Clock, Check, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import axios from 'axios';
 
@@ -418,8 +418,10 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
                 <div
                   key={user._id}
                   onClick={() => setSelectedUser(user)}
-                  className={`p-4 cursor-pointer transition-colors duration-200 ${
-                    selectedUser?._id === user._id ? 'bg-blue-50' : 'hover:bg-gray-100'
+                  className={`p-4 cursor-pointer transition-all duration-200 ${
+                    selectedUser?._id === user._id 
+                      ? 'bg-blue-50 border-l-4 border-blue-500' 
+                      : 'hover:bg-gray-100 border-l-4 border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -430,8 +432,8 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
                         className="h-12 w-12 rounded-full object-cover ring-2 ring-offset-2 ring-blue-100"
                       />
                     ) : (
-                      <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center ring-2 ring-offset-2 ring-blue-100">
-                        <User className="h-6 w-6 text-blue-600" />
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center ring-2 ring-offset-2 ring-blue-100">
+                        <User className="h-6 w-6 text-white" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
@@ -454,9 +456,14 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
                         ) : null}
                       </div>
                       {user.lastMessage && (
-                        <p className="text-sm text-gray-500 truncate mt-1">
-                          {user.lastMessage.content}
-                        </p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <p className="text-sm text-gray-500 truncate flex-1">
+                            {user.lastMessage.content}
+                          </p>
+                          <span className="text-xs text-gray-400">
+                            {format(new Date(user.lastMessage.timestamp), 'h:mm a')}
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -471,7 +478,7 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
           {selectedUser ? (
             <>
               {/* Chat Header */}
-              <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+              <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   {selectedUser.profilePicture ? (
                     <img
@@ -480,8 +487,8 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
                       className="h-12 w-12 rounded-full object-cover ring-2 ring-offset-2 ring-blue-100"
                     />
                   ) : (
-                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center ring-2 ring-offset-2 ring-blue-100">
-                      <User className="h-6 w-6 text-blue-600" />
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center ring-2 ring-offset-2 ring-blue-100">
+                      <User className="h-6 w-6 text-white" />
                     </div>
                   )}
                   <div>
@@ -510,7 +517,12 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
                 {messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
-                    <p className="text-gray-500">No messages yet. Start the conversation!</p>
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <MessageSquare className="h-8 w-8 text-blue-600" />
+                      </div>
+                      <p className="text-gray-500">No messages yet. Start the conversation!</p>
+                    </div>
                   </div>
                 ) : (
                   messages.map((message, index) => {
@@ -535,16 +547,27 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
                           <div
                             className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                               message.sender === currentUser?._id
-                                ? 'bg-blue-600 text-white'
+                                ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
                                 : 'bg-white text-gray-900 shadow-sm'
                             }`}
                           >
                             <p className="text-sm">{message.content}</p>
-                            <p className={`text-xs mt-1 ${
+                            <div className={`flex items-center gap-1 mt-1 ${
                               message.sender === currentUser?._id ? 'text-blue-100' : 'text-gray-500'
                             }`}>
-                              {format(new Date(message.timestamp), 'h:mm a')}
-                            </p>
+                              <span className="text-xs">
+                                {format(new Date(message.timestamp), 'h:mm a')}
+                              </span>
+                              {message.sender === currentUser?._id && (
+                                <span className="text-xs">
+                                  {message.read ? (
+                                    <CheckCheck className="h-3 w-3" />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -581,7 +604,7 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
                   <button
                     type="submit"
                     disabled={!newMessage.trim()}
-                    className="bg-blue-600 text-white p-2.5 rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-2.5 rounded-full hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     <Send className="h-5 w-5" />
                   </button>
@@ -590,8 +613,8 @@ const Chat: React.FC<ChatProps> = ({ onClose, onUnreadCountUpdate }) => {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-500 bg-gray-50">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                <User className="h-8 w-8 text-blue-600" />
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center mb-4">
+                <User className="h-8 w-8 text-white" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Select a user to start chatting</h3>
               <p className="text-sm text-gray-500">Choose from your connections to begin a conversation</p>

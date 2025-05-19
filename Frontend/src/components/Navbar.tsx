@@ -1,7 +1,7 @@
 // src/components/Navbar.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown, LogOut, Menu, X, PlusCircle } from 'lucide-react';
+import { Search, Bell, MessageSquare, User, Briefcase, Trophy, Crown, LogOut, Menu, X, PlusCircle, CheckCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CiCoins1 } from "react-icons/ci";
 import Leaderboard from './Leaderboard';
@@ -16,10 +16,11 @@ const Navbar: React.FC = () => {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const [isMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [coins, setCoins] = useState(0);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -57,13 +58,10 @@ const Navbar: React.FC = () => {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'NOTIFICATION') {
-          // Update unread count
           setUnreadCount(prev => prev + 1);
-          // Update coins if notification contains coins
           if (data.notification.coins) {
             setCoins(prev => prev + data.notification.coins);
           }
-          // Open notification panel if it contains coins
           if (data.notification.coins) {
             setIsNotificationOpen(true);
           }
@@ -92,84 +90,143 @@ const Navbar: React.FC = () => {
   };
 
   return (
-    <>
-      <nav className="bg-white border-b border-gray-200 fixed w-full z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Link to="/" className="flex-shrink-0 flex items-center">
-                <Briefcase className="h-8 w-8 text-blue-600" />
-                <span className="ml-2 text-xl font-bold text-gray-900">Questify</span>
-              </Link>
-              
-              {isAuthenticated && (
-                <div className="ml-6 relative flex-grow max-w-3xl">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="Search for quests, companies, or skills"
-                    type="search"
-                  />
-                </div>
-              )}
-            </div>
+    <nav className="bg-white shadow-sm fixed w-full z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex items-center">
+            <Link to="/" className="flex items-center">
+              <Crown className="h-8 w-8 text-blue-600" />
+              <span className="ml-2 text-xl font-bold text-gray-900">Questify</span>
+            </Link>
+          </div>
 
-            {isAuthenticated ? (
-              <div className="flex items-center space-x-4">
-                {currentUser?.role === 'hirer' && (
-                  <Link
-                    to="/create-quest"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <PlusCircle className="h-5 w-5 mr-2" />
-                    Create Quest
-                  </Link>
-                )}
-                <div className="flex items-center space-x-2 bg-yellow-50 px-3 py-1 rounded-full">
-                  <CiCoins1 className="h-5 w-5 text-yellow-500" />
-                  <span className="text-sm font-medium text-yellow-700">{coins}</span>
+          {/* Search Bar */}
+          <div className="flex-1 flex items-center justify-center px-2 lg:ml-6 lg:justify-end">
+            <div className="max-w-lg w-full lg:max-w-xs">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
                 </div>
+                <input
+                  type="text"
+                  placeholder="Search quests..."
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right side buttons */}
+          <div className="flex items-center">
+            {isAuthenticated ? (
+              <>
+                {/* Coins Display */}
+                <div className="flex items-center mr-4">
+                  <CiCoins1 className="h-6 w-6 text-yellow-500 mr-1" />
+                  <span className="text-gray-700 font-medium">{coins}</span>
+                </div>
+
+                {/* Leaderboard Button */}
                 <button
                   onClick={() => setShowLeaderboard(true)}
-                  className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                  className="p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Trophy className="h-6 w-6" />
                 </button>
-                <Link
-                  to="/notifications"
-                  className="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+
+                {/* Chat Button */}
+                <button
+                  onClick={() => setShowChat(true)}
+                  className="p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative"
+                >
+                  <MessageSquare className="h-6 w-6" />
+                  {unreadMessages > 0 && (
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+                      {unreadMessages}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications */}
+                <button
+                  onClick={() => setIsNotificationOpen(true)}
+                  className="p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 relative"
                 >
                   <Bell className="h-6 w-6" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white" />
+                    <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
+                      {unreadCount}
+                    </span>
                   )}
-                </Link>
-                <Link
-                  to="/profile"
-                  className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-                >
-                  <User className="h-6 w-6" />
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
-                >
-                  <LogOut className="h-6 w-6" />
                 </button>
-              </div>
+
+                {/* Upgrade Button */}
+                <button
+                  onClick={() => setShowSubscriptionModal(true)}
+                  className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Crown className="h-4 w-4 mr-2" />
+                  Upgrade
+                </button>
+
+                {/* User Menu */}
+                <div className="ml-4 relative">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center text-gray-700 hover:text-gray-900 focus:outline-none"
+                  >
+                    {currentUser?.profilePicture ? (
+                      <img
+                        src={currentUser.profilePicture}
+                        alt={currentUser.name}
+                        className="h-8 w-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                        <User className="h-5 w-5 text-blue-600" />
+                      </div>
+                    )}
+                    <span className="ml-2 text-sm font-medium">{currentUser?.name}</span>
+                    <ChevronDown className="ml-1 h-4 w-4" />
+                  </button>
+
+                  {showUserMenu && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                      <div className="py-1">
+                        <Link
+                          to="/profile"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Profile
+                        </Link>
+                        <Link
+                          to="/settings"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Settings
+                        </Link>
+                        <button
+                          onClick={handleLogout}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Sign out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
-              <div className="flex items-center">
+              <div className="flex items-center space-x-4">
                 <Link
                   to="/login"
                   className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >
-                  Log in
+                  Sign in
                 </Link>
                 <Link
-                  to="/signup"
-                  className="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+                  to="/register"
+                  className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium"
                 >
                   Sign up
                 </Link>
@@ -177,21 +234,22 @@ const Navbar: React.FC = () => {
             )}
           </div>
         </div>
-      </nav>
+      </div>
 
       {/* Leaderboard Modal */}
       {showLeaderboard && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
-            <button
-              onClick={() => setShowLeaderboard(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
-            >
-              ×
-            </button>
-            <div className="p-1">
-              <Leaderboard />
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Leaderboard</h2>
+              <button
+                onClick={() => setShowLeaderboard(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="h-6 w-6" />
+              </button>
             </div>
+            <Leaderboard onClose={() => setShowLeaderboard(false)} />
           </div>
         </div>
       )}
@@ -199,21 +257,22 @@ const Navbar: React.FC = () => {
       {/* Subscription Modal */}
       {showSubscriptionModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
-            <button
-              onClick={() => setShowSubscriptionModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
-            >
-              ×
-            </button>
-            <div className="p-1">
-              <SubscriptionPlans showInModal={true} />
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Upgrade Your Plan</h2>
+              <button
+                onClick={() => setShowSubscriptionModal(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="h-6 w-6" />
+              </button>
             </div>
+            <SubscriptionPlans onClose={() => setShowSubscriptionModal(false)} />
           </div>
         </div>
       )}
 
-      {/* Notification Modal */}
+      {/* Notifications Modal */}
       {isNotificationOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[70vh] flex overflow-hidden mt-16">
@@ -239,68 +298,9 @@ const Navbar: React.FC = () => {
 
       {/* Chat Modal */}
       {showChat && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[85vh] flex overflow-hidden">
-            <div className="flex-1 flex flex-col bg-white">
-              <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
-                <button
-                  onClick={() => setShowChat(false)}
-                  className="p-2 text-gray-400 hover:text-gray-500 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                <Chat 
-                  onClose={() => setShowChat(false)} 
-                  onUnreadCountUpdate={(count) => setUnreadMessages(count)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <Chat onClose={() => setShowChat(false)} onUnreadCountUpdate={(count) => setUnreadMessages(count)} />
       )}
-
-      {/* Mobile menu */}
-      {isMenuOpen && (
-        <div className="sm:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1">
-            {currentUser ? (
-              <>
-                <Link
-                  to="/profile"
-                  className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium"
-                >
-                  Profile
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="text-gray-500 hover:text-gray-700 block w-full text-left px-3 py-2 rounded-md text-base font-medium"
-                >
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="text-gray-500 hover:text-gray-700 block px-3 py-2 rounded-md text-base font-medium"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className="bg-blue-600 text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Register
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
+    </nav>
   );
 };
 

@@ -62,8 +62,8 @@ const QuestDetailPage: React.FC = () => {
     
     try {
       submitToQuest({
-        questId: quest.id,
-        userId: currentUser.id,
+        questId: quest._id,
+        userId: currentUser._id,
         videoDemo,
         githubLink,
         description

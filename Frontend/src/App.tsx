@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage';
 import Dashboard from './pages/Dashboard';
 import NotificationsPage from './pages/NotificationsPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import HirerSubmissionsPage from './pages/HirerSubmissionsPage';
 
 function App() {
   return (
@@ -22,10 +23,11 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/quest/:id" element={<QuestDetailPage />} />
-            <Route path="/create-quest" element={<CreateQuestPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+            <Route path="/create-quest" element={<ProtectedRoute><CreateQuestPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+            <Route path="/submissions" element={<ProtectedRoute><HirerSubmissionsPage /></ProtectedRoute>} />
           </Routes>
         </QuestProvider>
       </AuthProvider>
