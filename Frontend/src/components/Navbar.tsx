@@ -19,6 +19,13 @@ const Navbar: React.FC = () => {
   const [isMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [coins, setCoins] = useState(0);
+
+  useEffect(() => {
+    if (currentUser) {
+      setCoins(currentUser.coins || 0);
+    }
+  }, [currentUser]);
 
   const handleLogout = async () => {
     try {
@@ -28,39 +35,6 @@ const Navbar: React.FC = () => {
       console.error('Error logging out:', error);
     }
   };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      // Fetch unread messages count
-      const fetchUnreadCount = async () => {
-        try {
-          const response = await fetch('http://localhost:5000/api/messages/unread/count', {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            setUnreadMessages(data.count);
-          }
-        } catch (error) {
-          console.error('Error fetching unread messages:', error);
-        }
-      };
-
-      fetchUnreadCount();
-      // Set up WebSocket connection for real-time updates
-      const ws = new WebSocket('ws://localhost:5000');
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'unread_count') {
-          setUnreadMessages(data.count);
-        }
-      };
-
-      return () => ws.close();
-    }
-  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -82,9 +56,13 @@ const Navbar: React.FC = () => {
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.type === 'notification') {
+        if (data.type === 'NOTIFICATION') {
           // Update unread count
           setUnreadCount(prev => prev + 1);
+          // Update coins if notification contains coins
+          if (data.notification.coins) {
+            setCoins(prev => prev + data.notification.coins);
+          }
           // Open notification panel if it contains coins
           if (data.notification.coins) {
             setIsNotificationOpen(true);
@@ -149,6 +127,16 @@ const Navbar: React.FC = () => {
                     Create Quest
                   </Link>
                 )}
+                <div className="flex items-center space-x-2 bg-yellow-50 px-3 py-1 rounded-full">
+                  <CiCoins1 className="h-5 w-5 text-yellow-500" />
+                  <span className="text-sm font-medium text-yellow-700">{coins}</span>
+                </div>
+                <button
+                  onClick={() => setShowLeaderboard(true)}
+                  className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"
+                >
+                  <Trophy className="h-6 w-6" />
+                </button>
                 <Link
                   to="/notifications"
                   className="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md"

@@ -48,9 +48,17 @@ router.post("/", auth, async (req, res) => {
     // Create notification for the hirer about submission
     const hirerNotification = new Notification({
       user: quest.postedBy,
-      type: 'quest',
-      message: `${seeker.name} has submitted a solution for your quest "${quest.title}". Check their video demo and GitHub link for details.`,
-      read: false
+      type: 'NEW_SUBMISSION',
+      message: `${seeker.name} has submitted a solution for your quest "${quest.title}"`,
+      read: false,
+      data: {
+        submissionId: savedSubmission._id,
+        questId: quest._id,
+        seekerName: seeker.name,
+        videoDemo,
+        githubLink,
+        description
+      }
     });
 
     await hirerNotification.save();
@@ -58,25 +66,20 @@ router.post("/", auth, async (req, res) => {
     // Create notification for the seeker about coins earned
     const seekerNotification = new Notification({
       user: seeker._id,
-      type: 'quest',
+      type: 'COINS_EARNED',
       message: `You earned ${POINTS_FOR_SUBMISSION} coins for submitting a solution to "${quest.title}"!`,
       coins: POINTS_FOR_SUBMISSION,
-      read: false
+      read: false,
+      data: {
+        questId: quest._id,
+        submissionId: savedSubmission._id
+      }
     });
 
     await seekerNotification.save();
 
     // Send real-time notifications
-    sendNotification(quest.postedBy, {
-      ...hirerNotification.toObject(),
-      submission: {
-        videoDemo,
-        githubLink,
-        description,
-        seekerName: seeker.name
-      }
-    });
-
+    sendNotification(quest.postedBy, hirerNotification.toObject());
     sendNotification(seeker._id, seekerNotification.toObject());
 
     res.status(201).json({
@@ -86,6 +89,35 @@ router.post("/", auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error in submission route:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get submission by ID
+router.get("/:id", auth, async (req, res) => {
+  try {
+    const submission = await Submission.findById(req.params.id)
+      .populate("questId", "title description postedBy")
+      .populate("userId", "name email");
+
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    // Check if the user is either the submitter or the quest poster
+    const quest = await Quest.findById(submission.questId);
+    if (!quest) {
+      return res.status(404).json({ message: "Quest not found" });
+    }
+
+    if (submission.userId._id.toString() !== req.user.id && 
+        quest.postedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to view this submission" });
+    }
+
+    res.json(submission);
+  } catch (error) {
+    console.error('Error fetching submission:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -117,6 +149,53 @@ router.get("/", auth, async (req, res) => {
     res.json(transformedSubmissions);
   } catch (error) {
     console.error('Error fetching submissions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update submission status (approve/reject)
+router.put("/:id/status", auth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const submission = await Submission.findById(req.params.id)
+      .populate("questId", "title postedBy")
+      .populate("userId", "name");
+
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    // Check if the user is the quest poster
+    const quest = await Quest.findById(submission.questId);
+    if (quest.postedBy.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to update this submission" });
+    }
+
+    submission.status = status;
+    await submission.save();
+
+    // Create notification for the submitter
+    const notification = new Notification({
+      user: submission.userId._id,
+      type: status === 'approved' ? 'SUBMISSION_APPROVED' : 'SUBMISSION_REJECTED',
+      message: `Your submission for "${quest.title}" has been ${status}`,
+      read: false,
+      data: {
+        questId: quest._id,
+        submissionId: submission._id
+      }
+    });
+
+    await notification.save();
+    sendNotification(submission.userId._id, notification.toObject());
+
+    res.json(submission);
+  } catch (error) {
+    console.error('Error updating submission status:', error);
     res.status(500).json({ error: error.message });
   }
 });

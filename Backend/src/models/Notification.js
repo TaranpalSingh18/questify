@@ -8,7 +8,14 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['login', 'certificate', 'quest', 'message'],
+    enum: [
+      'NEW_SUBMISSION',
+      'SUBMISSION_APPROVED',
+      'SUBMISSION_REJECTED',
+      'COINS_EARNED',
+      'QUEST_COMPLETED',
+      'LOGIN'
+    ],
     required: true
   },
   message: {
@@ -22,6 +29,20 @@ const notificationSchema = new mongoose.Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  data: {
+    questId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Quest'
+    },
+    submissionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Submission'
+    },
+    seekerName: String,
+    videoDemo: String,
+    githubLink: String,
+    description: String
   }
 }, {
   timestamps: true
